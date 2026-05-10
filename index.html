@@ -1,0 +1,25 @@
+<html>
+  <head>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
+  </head>
+  <body>
+    <canvas id="canvas" height="600" width="600"></canvas>
+    <script type="module">
+      import init, { render } from './web/pkg/without_a_bundler.js';
+
+      async function run() {
+        await init();
+        const response = await fetch('./leaf4_permutted.json');
+        const json = await response.json();
+        const fname = json.fname;
+        var image = new Image();
+        image.src = `./${fname}`;
+        image.onload = function() {
+          render(image, json.width, json.height, json.trunk_width);
+        }
+      }
+
+      run();
+    </script>
+  </body>
+</html>
