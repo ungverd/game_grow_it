@@ -731,8 +731,8 @@ fn generate_shader_and_arr(width_ratio: f64,
         //alert(&format!("x {:?} y {:?} w {:?} h {:?}", rect.x, rect.y, rect.width, rect.height));
         populate_leaf(&rect,
                  leaf_segment,
-                 trunk_w,
-                 trunk_h,
+                 leaf_w,
+                 leaf_h,
                  leaf_x0,
                  leaf_y0,
                  true,
@@ -912,7 +912,7 @@ fn generate_shader_and_arr(width_ratio: f64,
                     for (int y_before_conversion=start; y_before_conversion<=end; y_before_conversion++) {{
                         float y_angle = float(y_before_conversion) * (2.0 * PI) + gamma;
                         float beta_rate = (y_angle - converted_angle_start) / beta;
-                        float height_this_point_source = trunk_h * beta_rate;
+                        float height_this_point_source = source_h * beta_rate;
                         float y_source = source_y0 + height_this_point_source;
                         float now_a = get_dist_from_root(x_source,
                                                          y_source,
