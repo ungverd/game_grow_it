@@ -9,13 +9,13 @@
 
       async function run() {
         await init();
-        const response = await fetch('./leaf4_permutted.json');
+        const response = await fetch('./leaf2_rotated_square.json');
         const json = await response.json();
         const fname = json.fname;
         var image = new Image();
         image.src = `./${fname}`;
         image.onload = function() {
-          render(image, json.width, json.height, json.trunk_width);
+          render(image, json.xmax_ratio, json.ymax_ratio, json.trunk_ratio);
         }
       }
 
