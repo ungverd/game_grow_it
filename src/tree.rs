@@ -15,9 +15,16 @@ const START_Y: i32 = 1;
 const LEFT_BOOL: bool = true;
 const RIGHT_BOOL: bool = false;
 const SEMI_W: f64 = F_DEST_REF / 2f64;
-pub const MAX_RECTS: usize = 256;
-pub const RECTS_ARR_LENGTH: usize = MAX_RECTS * 16;
+pub const MAX_RECTS: usize = 1024;
+pub const NUM_UNIFORM_ARRAYS: usize = 7;
 const CANVAS_REF_WIDTH: f32 = 600.0;
+pub const UBOS_NAMES: [&'static str; 7] = ["Position_size",
+                                       "Center_x_y_bound_min_max_mat",
+                                       "Straightleaf_left_radius_convastart_x_y_to_plus",
+                                       "Dist_from_root_beta_prevleft_prevright",
+                                       "Smoothstepcenter_xy_12",
+                                       "Angle1_angle2_angle3_angle4",
+                                       "Radius1_radius2_radius3_radius4"];
 
 
 fn get_size(width: f64, height: f64, f_source_ref: f64) -> (f64, f64, f64) {
@@ -355,15 +362,15 @@ fn populate_leaf(rect: &Rect,
                  is_leaf: bool,
                  f_source_ref: f64,
                  scaling: f64,
-                 arr: &mut [f32],
+                 arr: &mut [[f32; MAX_RECTS]],
                  entity_num: usize) {
-    arr[entity_num * 4] = rect.x as f32;
-    arr[entity_num * 4 + 1] = rect.y as f32;
-    arr[entity_num * 4 + 2] = rect.width as f32;
-    arr[entity_num * 4 + 3] = rect.height as f32;
-    arr[MAX_RECTS * 8 + entity_num * 4] = if segment.straight { 1.0 } else { 0.0 };
-    arr[MAX_RECTS * 12 + entity_num * 4] = if is_leaf { 1.0 } else { 0.0 };
-    arr[MAX_RECTS * 12 + entity_num * 4 + 1] = segment.distance_from_root as f32;
+    let straightleaf = ((segment.straight as i32) * 2 + (is_leaf as i32)) as f32;
+    arr[0][entity_num * 4] = rect.x as f32;
+    arr[0][entity_num * 4 + 1] = rect.y as f32;
+    arr[0][entity_num * 4 + 2] = rect.width as f32;
+    arr[0][entity_num * 4 + 3] = rect.height as f32;
+    arr[2][entity_num * 4] = straightleaf;
+    arr[3][entity_num * 4] = segment.distance_from_root as f32;
     let semi_w_big_side = (source_w - f_source_ref / 2f64) / scaling;
     if segment.straight {
         let si = segment.angle_start.sin();
@@ -389,13 +396,13 @@ fn populate_leaf(rect: &Rect,
         //log(&format!("mat {:?} {:?} {:?} {:?}", mat[0][0], mat[0][1], mat[1][0], mat[1][1]));
         //log(&format!("x_to_plus {:?}", x_to_plus));
         //log(&format!("y_to_plus {:?}", y_to_plus));
-        arr[MAX_RECTS * 4 + entity_num * 4] = mat[0][0] as f32;
-        arr[MAX_RECTS * 4 + entity_num * 4 + 1] = mat[0][1] as f32;
-        arr[MAX_RECTS * 4 + entity_num * 4 + 2] = mat[1][0] as f32;
-        arr[MAX_RECTS * 4 + entity_num * 4 + 3] = mat[1][1] as f32;
+        arr[1][entity_num * 4] = mat[0][0] as f32;
+        arr[1][entity_num * 4 + 1] = mat[0][1] as f32;
+        arr[1][entity_num * 4 + 2] = mat[1][0] as f32;
+        arr[1][entity_num * 4 + 3] = mat[1][1] as f32;
 
-        arr[MAX_RECTS * 8 + entity_num * 4 + 2] = x_to_plus as f32;
-        arr[MAX_RECTS * 8 + entity_num * 4 + 3] = y_to_plus as f32;
+        arr[2][entity_num * 4 + 2] = x_to_plus as f32;
+        arr[2][entity_num * 4 + 3] = y_to_plus as f32;
     } else {
         let beta;
         if segment.left {
@@ -431,14 +438,14 @@ fn populate_leaf(rect: &Rect,
         } else {
             conv_angle_start = segment.angle_start + PI;
         }
-        arr[MAX_RECTS * 4 + entity_num * 4] = center_x as f32;
-        arr[MAX_RECTS * 4 + entity_num * 4 + 1] = center_y as f32;
-        arr[MAX_RECTS * 4 + entity_num * 4 + 2] = bound_min as f32;
-        arr[MAX_RECTS * 4 + entity_num * 4 + 3] = bound_max as f32;
-        arr[MAX_RECTS * 8 + entity_num * 4 + 1] = if segment.left { 1.0 } else { 0.0 };
-        arr[MAX_RECTS * 8 + entity_num * 4 + 2] = segment.radius as f32;
-        arr[MAX_RECTS * 8 + entity_num * 4 + 3] = conv_angle_start as f32;
-        arr[MAX_RECTS * 12 + entity_num * 4 + 2] = beta as f32;
+        arr[1][entity_num * 4] = center_x as f32;
+        arr[1][entity_num * 4 + 1] = center_y as f32;
+        arr[1][entity_num * 4 + 2] = bound_min as f32;
+        arr[1][entity_num * 4 + 3] = bound_max as f32;
+        arr[2][entity_num * 4 + 1] = if segment.left { 1.0 } else { 0.0 };
+        arr[2][entity_num * 4 + 2] = segment.radius as f32;
+        arr[2][entity_num * 4 + 3] = conv_angle_start as f32;
+        arr[3][entity_num * 4 + 1] = beta as f32;
     }
 }
 
@@ -462,7 +469,7 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                                radius: f64,
                                theta_max: f64,
                                theta_min: f64,
-                               mut arr: &mut [f32]) -> (String, usize) {
+                               mut arr: &mut [[f32; MAX_RECTS]]) -> (String, usize) {
     let scaling: f64 = source_ref_ratio / (F_DEST_REF);
     let trunk_w = source_ref_ratio;
     let trunk_h = source_ref_ratio * PI / 6f64;
@@ -533,15 +540,30 @@ pub fn generate_shader_and_arr(width_ratio: f64,
         const float x_circle = {:?};
         const float y_circle = {:?};
         const float radius = {:?};
-        const float theta_min = {:?};
-        const float theta_max = {:?};
         const float line_width = {:?};
-        layout(std140) uniform rectData {{
+
+        layout(std140) uniform Position_size {{
             vec4 position_size[MAX_RECTS];
-            vec4 center_x_y_bound_min_max_mat[MAX_RECTS];
-            vec4 straight_left_radius_convastart_x_y_to_plus[MAX_RECTS]; // if straight, left (y) is not used
-            vec4 is_leaf_dist_from_root_beta[MAX_RECTS];
         }};
+        layout(std140) uniform Center_x_y_bound_min_max_mat {{
+            vec4 center_x_y_bound_min_max_mat[MAX_RECTS];
+        }};
+        layout(std140) uniform Straightleaf_left_radius_convastart_x_y_to_plus {{
+            vec4 straightleaf_left_radius_convastart_x_y_to_plus[MAX_RECTS]; // if straight, left (y) is not used
+        }};
+        layout(std140) uniform Dist_from_root_beta_prevleft_prevright {{
+            vec4 dist_from_root_beta_prevleft_prevright[MAX_RECTS];
+        }};
+        layout(std140) uniform Smoothstepcenter_xy_12 {{
+            vec4 smoothstepcenter_xy_12[MAX_RECTS];
+        }};
+        layout(std140) uniform Angle1_angle2_angle3_angle4 {{ // for radial smoothstep interpolation
+            vec4 angle1_angle2_angle3_angle4[MAX_RECTS];
+        }};
+        layout(std140) uniform Radius1_radius2_radius3_radius4 {{ // for radial smoothstep interpolation
+            vec4 radius1_radius2_radius3_radius4[MAX_RECTS];
+        }};
+
         uniform uint rectCount;
         uniform float canvas_w;
         uniform sampler2D u_image;
@@ -554,22 +576,23 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                                  float source_w,
                                  float source_x0,
                                  float source_y0,
-                                 uint i) {{
+                                 uint i,
+                                 bool is_straight) {{
             if (x_source < source_x0 ||
                 x_source > source_x0 + source_w ||
                 y_source < source_y0 ||
                 y_source > source_y0 + source_h ||
                 texture(u_image, vec2(x_source, y_source)).w < 0.5) return -MIN_A_DIF * 4.0;
             float dist_from_base = y_source / SCALING;
-            if (straight_left_radius_convastart_x_y_to_plus[i].x < 0.5) {{ // not straight
-                if (straight_left_radius_convastart_x_y_to_plus[i].y > 0.5)
-                    dist_from_base = dist_from_base * straight_left_radius_convastart_x_y_to_plus[i].z
-                                     / (straight_left_radius_convastart_x_y_to_plus[i].z - SEMI_W);
+            if (!is_straight) {{
+                if (straightleaf_left_radius_convastart_x_y_to_plus[i].y > 0.5)
+                    dist_from_base = dist_from_base * straightleaf_left_radius_convastart_x_y_to_plus[i].z
+                                     / (straightleaf_left_radius_convastart_x_y_to_plus[i].z - SEMI_W);
                 else
-                    dist_from_base = dist_from_base * straight_left_radius_convastart_x_y_to_plus[i].z
-                                     / (straight_left_radius_convastart_x_y_to_plus[i].z + SEMI_W);
+                    dist_from_base = dist_from_base * straightleaf_left_radius_convastart_x_y_to_plus[i].z
+                                     / (straightleaf_left_radius_convastart_x_y_to_plus[i].z + SEMI_W);
             }}
-            float base_dist_from_root = is_leaf_dist_from_root_beta[i].y;
+            float base_dist_from_root = dist_from_root_beta_prevleft_prevright[i].x;
             return base_dist_from_root + dist_from_base;
         }}
 
@@ -581,13 +604,33 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                     pos.y < position_size[i].y ||
                     pos.x > position_size[i].x + position_size[i].z ||
                     pos.y > position_size[i].y + position_size[i].w) continue;
-                float is_leaf = is_leaf_dist_from_root_beta[i].x;
-                float is_straight = straight_left_radius_convastart_x_y_to_plus[i].x;
+                
+                bool is_straight;
+                bool is_leaf;
+                float straight_leaf = straightleaf_left_radius_convastart_x_y_to_plus[i].x;
+                if (straight_leaf < 0.5) {{
+                    is_straight = false;
+                    is_leaf = false;
+                }} else {{
+                    if (straight_leaf < 1.5) {{
+                        is_straight = false;
+                        is_leaf = true;
+                    }} else {{
+                        if straight_leaf < 2.5 {{
+                            is_straight = true;
+                            is_leaf = false;
+                        }} else {{
+                            is_straight = true;
+                            is_leaf = true;
+                        }}
+                    }}
+                }}
+
                 float source_w;
                 float source_h;
                 float source_x0;
                 float source_y0;
-                if (is_leaf > 0.5) {{
+                if (is_leaf) {{
                     source_w = leaf_w;
                     source_h = leaf_h;
                     source_x0 = leaf_x0;
@@ -598,12 +641,12 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                     source_x0 = trunk_x0;
                     source_y0 = trunk_y0;
                 }}
-                if (is_straight > 0.5) {{
+                if (is_straight) {{
                     // matrix multiplication
                     // (x y) (x)
                     //  z w   y
-                    float x_to_plus = straight_left_radius_convastart_x_y_to_plus[i].z;
-                    float y_to_plus = straight_left_radius_convastart_x_y_to_plus[i].w;
+                    float x_to_plus = straightleaf_left_radius_convastart_x_y_to_plus[i].z;
+                    float y_to_plus = straightleaf_left_radius_convastart_x_y_to_plus[i].w;
                     float x_source = center_x_y_bound_min_max_mat[i].x * pos.x +
                                      center_x_y_bound_min_max_mat[i].y * pos.y +
                                      x_to_plus;
@@ -616,7 +659,8 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                                                      source_w,
                                                      source_x0,
                                                      source_y0,
-                                                     i);
+                                                     i,
+                                                     is_straight);
                     if (now_a > a) {{
                         a = now_a;
                         float radius_x = x_source - x_circle;
@@ -624,12 +668,9 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                         float now_radius = sqrt(radius_x*radius_x + radius_y*radius_y);
                         float radius_index = abs(now_radius - radius) / (line_width * SCALING);
                         if (radius_index < 1.0) {{
-                            //float now_theta = atan(radius_y, radius_x);
-                            //if (theta_min < now_theta && now_theta < theta_max) {{
-                                outColor = vec4(0.7, 0.8, 0.5, 1.0) * (1.0 - radius_index) +
-                                           texture(u_image, vec2(x_source, y_source)) * radius_index;
-                                continue;
-                            //}}
+                            outColor = vec4(0.7, 0.8, 0.5, 1.0) * (1.0 - radius_index) +
+                                       texture(u_image, vec2(x_source, y_source)) * radius_index;
+                            continue;
                         }}
                         outColor = texture(u_image, vec2(x_source, y_source));
                     }}
@@ -638,10 +679,10 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                     float center_y = center_x_y_bound_min_max_mat[i].y;
                     float bound_min = center_x_y_bound_min_max_mat[i].z;
                     float bound_max = center_x_y_bound_min_max_mat[i].w;
-                    float left = straight_left_radius_convastart_x_y_to_plus[i].y;
-                    float radius = straight_left_radius_convastart_x_y_to_plus[i].z;
-                    float converted_angle_start = straight_left_radius_convastart_x_y_to_plus[i].w;
-                    float beta = is_leaf_dist_from_root_beta[i].z;
+                    float left = straightleaf_left_radius_convastart_x_y_to_plus[i].y;
+                    float radius = straightleaf_left_radius_convastart_x_y_to_plus[i].z;
+                    float converted_angle_start = straightleaf_left_radius_convastart_x_y_to_plus[i].w;
+                    float beta = dist_from_root_beta_prevleft_prevright[i].y;
 
                     float deltax = pos.x - center_x;
                     float deltay = pos.y - center_y;
@@ -689,7 +730,8 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                                                          source_w,
                                                          source_x0,
                                                          source_y0,
-                                                         i);
+                                                         i,
+                                                         is_straight);
                         if (now_a > a + MIN_A_DIF) {{
                             a = now_a;
                             outColor = texture(u_image, vec2(x_source, y_source));
@@ -713,8 +755,6 @@ pub fn generate_shader_and_arr(width_ratio: f64,
              x_circle,
              y_circle,
              radius,
-             theta_min,
-             theta_max,
              LINE_WIDTH);
     //log(&shader_str_with_value);
     (shader_str_with_value, entities_num)
