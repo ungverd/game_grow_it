@@ -16,6 +16,7 @@ const LEFT_BOOL: bool = true;
 const RIGHT_BOOL: bool = false;
 const SEMI_W: f64 = F_DEST_REF / 2f64;
 pub const MAX_RECTS: usize = 1024;
+pub const BUF_LENGTH: usize = MAX_RECTS * 4;
 pub const NUM_UNIFORM_ARRAYS: usize = 7;
 const CANVAS_REF_WIDTH: f32 = 600.0;
 pub const UBOS_NAMES: [&'static str; 7] = ["Position_size",
@@ -362,7 +363,7 @@ fn populate_leaf(rect: &Rect,
                  is_leaf: bool,
                  f_source_ref: f64,
                  scaling: f64,
-                 arr: &mut [[f32; MAX_RECTS]],
+                 arr: &mut [[f32; BUF_LENGTH]],
                  entity_num: usize) {
     let straightleaf = ((segment.straight as i32) * 2 + (is_leaf as i32)) as f32;
     arr[0][entity_num * 4] = rect.x as f32;
@@ -469,7 +470,7 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                                radius: f64,
                                theta_max: f64,
                                theta_min: f64,
-                               mut arr: &mut [[f32; MAX_RECTS]]) -> (String, usize) {
+                               mut arr: &mut [[f32; BUF_LENGTH]]) -> (String, usize) {
     let scaling: f64 = source_ref_ratio / (F_DEST_REF);
     let trunk_w = source_ref_ratio;
     let trunk_h = source_ref_ratio * PI / 6f64;
@@ -616,7 +617,7 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                         is_straight = false;
                         is_leaf = true;
                     }} else {{
-                        if straight_leaf < 2.5 {{
+                        if (straight_leaf < 2.5) {{
                             is_straight = true;
                             is_leaf = false;
                         }} else {{

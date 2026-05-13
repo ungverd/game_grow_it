@@ -58,7 +58,7 @@ pub fn render(img: web_sys::HtmlImageElement,
         }
         "##,
     )?;
-    let mut ubos_arr: [[f32; tree::MAX_RECTS]; tree::NUM_UNIFORM_ARRAYS] = [[0.0; tree::MAX_RECTS]; tree::NUM_UNIFORM_ARRAYS];
+    let mut ubos_arr: [[f32; tree::BUF_LENGTH]; tree::NUM_UNIFORM_ARRAYS] = [[0.0; tree::BUF_LENGTH]; tree::NUM_UNIFORM_ARRAYS];
     let (shader_str_with_value, rects_count) = tree::generate_shader_and_arr(width_ratio,
                                                                                     height_ratio,
                                                                                     trunk_ratio,
@@ -163,17 +163,6 @@ pub fn render(img: web_sys::HtmlImageElement,
     Err(val) => {return Err(val)}
     };
 
-    // Get the index of the Uniform Block from any program
-    //let block_index = context.get_uniform_block_index(&program, "rectData");
-
-    // Get the size of the Uniform Block in bytes
-    //let block_size = context.get_active_uniform_block_parameter(
-    //    &program,
-    //    block_index,
-    //    WebGl2RenderingContext::UNIFORM_BLOCK_DATA_SIZE
-    //);
-    //alert(&format!("block size in bytes {:?}!", block_size));
-
     bind_ubos_for_tree(&ubos_arr, &context, &program);
     let index2 = context.get_uniform_location(&program, "rectCount");
     context.uniform1ui(index2.as_ref(), rects_count as u32);
@@ -243,13 +232,23 @@ pub fn link_program(
     }
 }
 
-fn bind_ubos_for_tree(arr: &[[f32; tree::MAX_RECTS]],
+fn bind_ubos_for_tree(arr: &[[f32; tree::BUF_LENGTH]],
                       context: &WebGl2RenderingContext,
                       program: &WebGlProgram) -> Result<(), Box<dyn std::error::Error>> {
     for i in 0..tree::NUM_UNIFORM_ARRAYS {
         let ubo_name = tree::UBOS_NAMES[i];
         let rects_arr = &arr[i];
-            // Create Uniform Buffer to store our data
+        // Get the index of the Uniform Block from any program
+        //let block_index = context.get_uniform_block_index(&program, ubo_name);
+
+        // Get the size of the Uniform Block in bytes
+        //let block_size = context.get_active_uniform_block_parameter(
+        //    &program,
+        //    block_index,
+        //    WebGl2RenderingContext::UNIFORM_BLOCK_DATA_SIZE
+        //);
+        //alert(&format!("block size in bytes {:?}!", block_size));
+        // Create Uniform Buffer to store our data
         let ubo_buffer = context.create_buffer().ok_or("Failed to create buffer")?;
 
         // Bind it to tell WebGL we are working on this buffer
