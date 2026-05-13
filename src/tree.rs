@@ -1,9 +1,10 @@
-const DEST_REF: i32 = 30;
+const DEST_REF: i32 = 20;
+const LINE_WIDTH: f64 = 1.5;
 const F_DEST_REF: f64 = DEST_REF as f64;
 const PI: f64 = std::f64::consts::PI;
 //const STEM: [[u32; 3]; 6] = [[5,5,1], [2,1,12], [1,11,1], [5,5,5], [11,12,10], [5, 3, 2]]; // [right, left, repeats]
-const STEM: [[u32; 3]; 8] = [[5,5,1], [2,1,12], [1,11,1], [3,3,2], [5,6,3], [5, 3, 2], [1, 0, 5], [0, 1, 4]];
-//const STEM: [[u32; 3]; 3] = [[5,5,1], [1, 0, 4], [0, 1, 4]];
+//const STEM: [[u32; 3]; 8] = [[5,5,1], [2,1,12], [1,11,1], [3,3,2], [5,6,3], [5, 3, 2], [1, 0, 5], [0, 1, 4]];
+const STEM: [[u32; 3]; 3] = [[5,5,1], [1, 0, 4], [0, 1, 4]];
 //const STEM: [[u32; 3]; 3] = [[5,5,1], [1,2,11], [5,5,1]]; // [right, left, repeats]
 //const STEM: [[u32; 3]; 2] = [[5,5,1], [1,2,11]]; // [right, left, repeats]
 //const STEM: [[u32; 3]; 1] = [[1,1,1]]; // [right, left, repeats]
@@ -454,9 +455,14 @@ fn get_trunk_segment(segments: &Vec<Segment>, segment_num: usize) -> i32 {
 }
 
 pub fn generate_shader_and_arr(width_ratio: f64,
-                           height_ratio: f64,
-                           source_ref_ratio: f64,
-                           mut arr: &mut [f32]) -> (String, usize) {
+                               height_ratio: f64,
+                               source_ref_ratio: f64,
+                               x_circle: f64,
+                               y_circle: f64,
+                               radius: f64,
+                               theta_max: f64,
+                               theta_min: f64,
+                               mut arr: &mut [f32]) -> (String, usize) {
     let scaling: f64 = source_ref_ratio / (F_DEST_REF);
     let trunk_w = source_ref_ratio;
     let trunk_h = source_ref_ratio * PI / 6f64;
@@ -524,10 +530,16 @@ pub fn generate_shader_and_arr(width_ratio: f64,
         const float SEMI_W = {:?};
         const float MIN_A_DIF = SEMI_W * PI;
         const float CANVAS_REF_WIDTH = {:?};
+        const float x_circle = {:?};
+        const float y_circle = {:?};
+        const float radius = {:?};
+        const float theta_min = {:?};
+        const float theta_max = {:?};
+        const float line_width = {:?};
         layout(std140) uniform rectData {{
             vec4 position_size[MAX_RECTS];
             vec4 center_x_y_bound_min_max_mat[MAX_RECTS];
-            vec4 straight_left_radius_convastart_x_y_to_plus[MAX_RECTS]; // if straight, y field is not used
+            vec4 straight_left_radius_convastart_x_y_to_plus[MAX_RECTS]; // if straight, left (y) is not used
             vec4 is_leaf_dist_from_root_beta[MAX_RECTS];
         }};
         uniform uint rectCount;
@@ -607,6 +619,18 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                                                      i);
                     if (now_a > a) {{
                         a = now_a;
+                        float radius_x = x_source - x_circle;
+                        float radius_y = y_source - y_circle;
+                        float now_radius = sqrt(radius_x*radius_x + radius_y*radius_y);
+                        float radius_index = abs(now_radius - radius) / (line_width * SCALING);
+                        if (radius_index < 1.0) {{
+                            //float now_theta = atan(radius_y, radius_x);
+                            //if (theta_min < now_theta && now_theta < theta_max) {{
+                                outColor = vec4(0.7, 0.7, 0.5, 1.0) * (1.0 - radius_index) +
+                                           texture(u_image, vec2(x_source, y_source)) * radius_index;
+                                continue;
+                            //}}
+                        }}
                         outColor = texture(u_image, vec2(x_source, y_source));
                     }}
                 }} else {{
@@ -674,7 +698,24 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                 }}
             }}
         }}
-        "##, MAX_RECTS, scaling, leaf_x0, leaf_y0, leaf_w, leaf_h, trunk_x0, trunk_y0, trunk_w, trunk_h, SEMI_W, CANVAS_REF_WIDTH);
+        "##, MAX_RECTS,
+             scaling,
+             leaf_x0,
+             leaf_y0,
+             leaf_w,
+             leaf_h,
+             trunk_x0,
+             trunk_y0,
+             trunk_w,
+             trunk_h,
+             SEMI_W,
+             CANVAS_REF_WIDTH,
+             x_circle,
+             y_circle,
+             radius,
+             theta_min,
+             theta_max,
+             LINE_WIDTH);
     //log(&shader_str_with_value);
     (shader_str_with_value, entities_num)
 }

@@ -1,6 +1,7 @@
 use wasm_bindgen::prelude::*;
 use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader, WebGlUniformLocation};
 mod tree;
+mod gamestate;
 
 #[wasm_bindgen]
 extern "C" {
@@ -29,7 +30,12 @@ extern "C" {
 pub fn render(img: web_sys::HtmlImageElement,
               width_ratio: f64,
               height_ratio: f64,
-              trunk_ratio: f64) -> Result<(), JsValue> {
+              trunk_ratio: f64,
+              x_circle: f64,
+              y_circle: f64,
+              radius: f64,
+              theta_max: f64,
+              theta_min: f64) -> Result<(), JsValue> {
     let document = web_sys::window().unwrap().document().unwrap();
     let canvas = document.get_element_by_id("canvas").unwrap();
     let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
@@ -57,6 +63,11 @@ pub fn render(img: web_sys::HtmlImageElement,
     let (shader_str_with_value, rects_count) = tree::generate_shader_and_arr(width_ratio,
                                                                                     height_ratio,
                                                                                     trunk_ratio,
+                                                                                    x_circle,
+                                                                                    y_circle,
+                                                                                    radius,
+                                                                                    theta_max,
+                                                                                    theta_min,
                                                                                     &mut rects_arr);
     
     
@@ -132,12 +143,12 @@ pub fn render(img: web_sys::HtmlImageElement,
     context.tex_parameteri(
         WebGl2RenderingContext::TEXTURE_2D,
         WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-        WebGl2RenderingContext::LINEAR as i32,
+        WebGl2RenderingContext::NEAREST as i32,
     );
     context.tex_parameteri(
         WebGl2RenderingContext::TEXTURE_2D,
         WebGl2RenderingContext::TEXTURE_MAG_FILTER,
-        WebGl2RenderingContext::LINEAR as i32,
+        WebGl2RenderingContext::NEAREST as i32,
     );
 
     let err = context.tex_image_2d_with_u32_and_u32_and_html_image_element(
