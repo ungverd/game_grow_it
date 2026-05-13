@@ -626,7 +626,7 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                         if (radius_index < 1.0) {{
                             //float now_theta = atan(radius_y, radius_x);
                             //if (theta_min < now_theta && now_theta < theta_max) {{
-                                outColor = vec4(0.7, 0.7, 0.5, 1.0) * (1.0 - radius_index) +
+                                outColor = vec4(0.7, 0.8, 0.5, 1.0) * (1.0 - radius_index) +
                                            texture(u_image, vec2(x_source, y_source)) * radius_index;
                                 continue;
                             //}}
