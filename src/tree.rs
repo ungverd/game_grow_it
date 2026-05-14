@@ -1,10 +1,10 @@
 const DEST_REF: i32 = 20;
-const LINE_WIDTH: f64 = 1.5;
+const LINE_WIDTH: f64 = 2.0;
 const F_DEST_REF: f64 = DEST_REF as f64;
 const PI: f64 = std::f64::consts::PI;
 //const STEM: [[u32; 3]; 6] = [[5,5,1], [2,1,12], [1,11,1], [5,5,5], [11,12,10], [5, 3, 2]]; // [right, left, repeats]
-//const STEM: [[u32; 3]; 8] = [[5,5,1], [2,1,12], [1,11,1], [3,3,2], [5,6,3], [5, 3, 2], [1, 0, 5], [0, 1, 4]];
-const STEM: [[u32; 3]; 3] = [[5,5,1], [1, 0, 4], [0, 1, 4]];
+const STEM: [[u32; 3]; 8] = [[5,5,1], [2,1,12], [1,11,1], [3,3,2], [5,6,3], [5, 3, 2], [1, 0, 5], [0, 1, 4]];
+//const STEM: [[u32; 3]; 3] = [[5,5,1], [1, 0, 4], [0, 1, 4]];
 //const STEM: [[u32; 3]; 3] = [[5,5,1], [1,2,11], [5,5,1]]; // [right, left, repeats]
 //const STEM: [[u32; 3]; 2] = [[5,5,1], [1,2,11]]; // [right, left, repeats]
 //const STEM: [[u32; 3]; 1] = [[1,1,1]]; // [right, left, repeats]
@@ -540,7 +540,7 @@ pub fn generate_shader_and_arr(width_ratio: f64,
         const float CANVAS_REF_WIDTH = {:?};
         const float x_circle = {:?};
         const float y_circle = {:?};
-        const float radius = {:?};
+        const float radius_circle = {:?};
         const float line_width = {:?};
 
         layout(std140) uniform Position_size {{
@@ -595,6 +595,14 @@ pub fn generate_shader_and_arr(width_ratio: f64,
             }}
             float base_dist_from_root = dist_from_root_beta_prevleft_prevright[i].x;
             return base_dist_from_root + dist_from_base;
+        }}
+
+        vec4 get_out_color(float radius_index, float x_source, float y_source) {{
+            if (radius_index < 1.0)
+                return vec4(0.7, 0.8, 0.5, 1.0) * (1.0 - radius_index) +
+                            texture(u_image, vec2(x_source, y_source)) * radius_index;
+                
+            return texture(u_image, vec2(x_source, y_source));
         }}
 
         void main() {{
@@ -667,13 +675,8 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                         float radius_x = x_source - x_circle;
                         float radius_y = y_source - y_circle;
                         float now_radius = sqrt(radius_x*radius_x + radius_y*radius_y);
-                        float radius_index = abs(now_radius - radius) / (line_width * SCALING);
-                        if (radius_index < 1.0) {{
-                            outColor = vec4(0.7, 0.8, 0.5, 1.0) * (1.0 - radius_index) +
-                                       texture(u_image, vec2(x_source, y_source)) * radius_index;
-                            continue;
-                        }}
-                        outColor = texture(u_image, vec2(x_source, y_source));
+                        float radius_index = abs(now_radius - radius_circle) / (line_width * SCALING);
+                        outColor = get_out_color(radius_index, x_source, y_source);
                     }}
                 }} else {{
                     float center_x = center_x_y_bound_min_max_mat[i].x;
@@ -735,7 +738,15 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                                                          is_straight);
                         if (now_a > a + MIN_A_DIF) {{
                             a = now_a;
-                            outColor = texture(u_image, vec2(x_source, y_source));
+                            if (abs(beta) > 1.8) {{ // a bit arbitrary value where fancy algorithm doesn't work well
+                                float deltay_source = y_source - y_circle;
+                                float x_intersect = x_circle - sqrt(radius_circle*radius_circle -
+                                                                    deltay_source*deltay_source);
+                                float radius_index = abs(x_source - x_intersect) / (line_width * SCALING);
+                                outColor = get_out_color(radius_index, x_source, y_source);
+                            }} else {{
+                                outColor = texture(u_image, vec2(x_source, y_source));
+                            }}
                         }}
                     }}
                 }}
