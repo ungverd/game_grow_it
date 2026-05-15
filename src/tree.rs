@@ -1,5 +1,7 @@
 const DEST_REF: i32 = 20;
 const LINE_WIDTH: f64 = 2.0;
+const SHADOW_WIDTH: f64 = 2.5;
+const SHADOW_STRENGTH: f64 = 0.2;
 const F_DEST_REF: f64 = DEST_REF as f64;
 const PI: f64 = std::f64::consts::PI;
 //const STEM: [[u32; 3]; 6] = [[5,5,1], [2,1,12], [1,11,1], [5,5,5], [11,12,10], [5, 3, 2]]; // [right, left, repeats]
@@ -554,7 +556,9 @@ fn populate_leaf(rect: &Rect,
                  theta_max: f64,
                  circle_radius: f64,
                  x_circle: f64,
-                 y_circle: f64,) {
+                 y_circle: f64,
+                 prev_left: i32,
+                 prev_right: i32) {
     let straightleaf = ((segment.straight as i32) * 2 + (is_leaf as i32)) as f32;
     arr[0][entity_num * 4] = rect.x as f32;
     arr[0][entity_num * 4 + 1] = rect.y as f32;
@@ -562,6 +566,8 @@ fn populate_leaf(rect: &Rect,
     arr[0][entity_num * 4 + 3] = rect.height as f32;
     arr[2][entity_num * 4] = straightleaf;
     arr[3][entity_num * 4] = segment.distance_from_root as f32;
+    arr[3][entity_num * 4 + 2] = prev_left as f32;
+    arr[3][entity_num * 4 + 3] = prev_right as f32;
     let semi_w_big_side = (source_w - f_source_ref / 2f64) / scaling;
     if segment.straight {
         let si = segment.angle_start.sin();
@@ -687,10 +693,11 @@ pub fn generate_shader_and_arr(width_ratio: f64,
     let segments = get_segments(F_DEST_REF);
 
     let mut entities_num = 0;
+    let mut prev_left = -1;
+    let mut prev_right = -1;
     for segment_num in 0..segments.len() {
         let leaf_segment = &segments[segment_num];
         let rect = get_rect(w_common, h_top, leaf_segment);
-        //alert(&format!("x {:?} y {:?} w {:?} h {:?}", rect.x, rect.y, rect.width, rect.height));
         populate_leaf(&rect,
                  leaf_segment,
                  leaf_w,
@@ -706,8 +713,10 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                  theta_max,
                  radius,
                  x_circle,
-                 y_circle);
-        //alert("leaf");
+                 y_circle,
+                 prev_left,
+                 prev_right);
+        let this_num = entities_num as i32;
         entities_num += 1;
         let trunk_segment_num = get_trunk_segment(&segments, segment_num);
         if trunk_segment_num >= 0 {
@@ -728,9 +737,15 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                  theta_max,
                  radius,
                  x_circle,
-                 y_circle);
+                 y_circle,
+                 prev_left,
+                 prev_right);
             entities_num += 1;
-            //alert("trunk");
+        }
+        if leaf_segment.left {
+            prev_left = this_num;
+        } else {
+            prev_right = this_num;
         }
     }
     //alert(&format!("{:?}", entities_num));
@@ -756,6 +771,10 @@ pub fn generate_shader_and_arr(width_ratio: f64,
         const float radius_circle = {:?};
         const float line_width = {:?};
         const float ABS_BETA_LIMIT = {:?};
+        const float shadow_width = {:?};
+        const float SHADOW_STRENGTH = {:?};
+        const vec4 border_color = vec4(0.7, 0.8, 0.5, 1.0);
+        const vec4 shadow_color = vec4(0.0, 0.0, 0.1, 1.0);
 
         layout(std140) uniform Position_size {{
             vec4 position_size[MAX_RECTS];
@@ -798,14 +817,14 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                 y_source < source_y0 ||
                 y_source > source_y0 + source_h ||
                 texture(u_image, vec2(x_source, y_source)).w < 0.5) return -MIN_A_DIF * 4.0;
-            float dist_from_base = y_source / SCALING;
+            float dist_from_base = (y_source - source_y0) / SCALING;
             if (!is_straight) {{
-                if (straightleaf_left_radius_convastart_x_y_to_plus[i].y > 0.5)
-                    dist_from_base = dist_from_base * straightleaf_left_radius_convastart_x_y_to_plus[i].z
-                                     / (straightleaf_left_radius_convastart_x_y_to_plus[i].z - SEMI_W);
+                float radius = straightleaf_left_radius_convastart_x_y_to_plus[i].z;
+                float left = straightleaf_left_radius_convastart_x_y_to_plus[i].y;
+                if (left > 0.5)
+                    dist_from_base = dist_from_base * radius / (radius - SEMI_W);
                 else
-                    dist_from_base = dist_from_base * straightleaf_left_radius_convastart_x_y_to_plus[i].z
-                                     / (straightleaf_left_radius_convastart_x_y_to_plus[i].z + SEMI_W);
+                    dist_from_base = dist_from_base * radius / (radius + SEMI_W);
             }}
             float base_dist_from_root = dist_from_root_beta_prevleft_prevright[i].x;
             return base_dist_from_root + dist_from_base;
@@ -813,10 +832,16 @@ pub fn generate_shader_and_arr(width_ratio: f64,
 
         vec4 get_out_color(float radius_index, float x_source, float y_source) {{
             if (radius_index < 1.0)
-                return vec4(0.7, 0.8, 0.5, 1.0) * (1.0 - radius_index) +
+                return border_color * (1.0 - radius_index) +
                             texture(u_image, vec2(x_source, y_source)) * radius_index;
                 
             return texture(u_image, vec2(x_source, y_source));
+        }}
+
+        vec4 get_shadow_color(float radius_index) {{
+            radius_index = radius_index * SHADOW_STRENGTH + 1.0 - SHADOW_STRENGTH;
+            return shadow_color * (1.0 - radius_index) +
+                   outColor * radius_index;
         }}
 
         float my_smoothstep(float x, float width, float height) {{ // x between 0 and width
@@ -825,7 +850,22 @@ pub fn generate_shader_and_arr(width_ratio: f64,
             return height * (3.0 * x_scaled*x_scaled - 2.0 * x_scaled*x_scaled*x_scaled); // from 0 to height
         }}
 
-        float get_radius_index_smoothstep(uint i, vec2 pos, uint segment_number) {{
+        vec2 get_x_y_straight(uint i, vec2 pos) {{
+            // matrix multiplication
+            // (x y) (x)
+            //  z w   y
+            float x_to_plus = straightleaf_left_radius_convastart_x_y_to_plus[i].z;
+            float y_to_plus = straightleaf_left_radius_convastart_x_y_to_plus[i].w;
+            float x_source = center_x_y_bound_min_max_mat[i].x * pos.x +
+                             center_x_y_bound_min_max_mat[i].y * pos.y +
+                             x_to_plus;
+            float y_source = center_x_y_bound_min_max_mat[i].z * pos.x +
+                             center_x_y_bound_min_max_mat[i].w * pos.y +
+                             y_to_plus;
+            return vec2(x_source, y_source);
+        }}
+
+        float get_radius_index_smoothstep(uint i, vec2 pos, uint segment_number, float lineshadow_width) {{
             float x_intersect;
             float y_intersect;
             float angle_start;
@@ -863,7 +903,129 @@ pub fn generate_shader_and_arr(width_ratio: f64,
             float x2 = angle - angle_start;
             if (abs(x2  - w/2.0) > abs(w/2.0)) return 10.0; // just arbitrary number > 1
             float y_ref = my_smoothstep(x2, w, h);
-            return abs(y_ref - y2) / line_width;
+            return abs(y_ref - y2) / lineshadow_width;
+        }}
+
+        float get_shadow_ratio_curled(uint i, vec2 pos, float source_h, float source_y0) {{
+            float center_x = center_x_y_bound_min_max_mat[i].x;
+            float center_y = center_x_y_bound_min_max_mat[i].y;
+            float bound_min = center_x_y_bound_min_max_mat[i].z;
+            float bound_max = center_x_y_bound_min_max_mat[i].w;
+            float left = straightleaf_left_radius_convastart_x_y_to_plus[i].y;
+            float radius = straightleaf_left_radius_convastart_x_y_to_plus[i].z;
+            float converted_angle_start = straightleaf_left_radius_convastart_x_y_to_plus[i].w;
+            float beta = dist_from_root_beta_prevleft_prevright[i].y;
+
+            float deltax = pos.x - center_x;
+            float deltay = pos.y - center_y;
+            float dist = sqrt(deltax * deltax +
+                                deltay * deltay);
+            if (bound_min > dist ||
+                dist > bound_max) return 10.0; // arbitrary big number
+            float x_dest;
+            if (left > 0.5) {{
+                if (radius > 0.0)
+                    x_dest = bound_max - dist;
+                else
+                    x_dest = dist - bound_min;
+            }} else {{
+                if (radius > 0.0)
+                    x_dest = dist - bound_min;
+                else
+                    x_dest = bound_max - dist;
+            }}
+            float x_source = x_dest * SCALING;
+            float gamma = atan(deltay, deltax);
+            float converted_alpha1 = (converted_angle_start - gamma)
+                                        / (2.0 * PI);
+            float converted_alpha2 = (converted_angle_start - gamma
+                                        + beta)
+                                        / (2.0 * PI);
+            int start;
+            int end;
+            if (beta > 0.0) {{
+                start = int(ceil(converted_alpha1));
+                end = int(floor(converted_alpha2));
+            }} else {{
+                start = int(ceil(converted_alpha2));
+                end = int(floor(converted_alpha1));
+            }}
+            if (end < start) return 10.0; // arbitrary big number
+            for (int y_before_conversion=start; y_before_conversion<=end; y_before_conversion++) {{
+                float y_angle = float(y_before_conversion) * (2.0 * PI) + gamma;
+                float beta_rate = (y_angle - converted_angle_start) / beta;
+                float height_this_point_source = source_h * beta_rate;
+                float y_source = source_y0 + height_this_point_source;
+                
+                if (abs(beta) > ABS_BETA_LIMIT - 0.0001) {{ // a bit arbitrary value where fancy algorithm doesn't work well
+                    float deltay_source = y_source - y_circle;
+                    float x_intersect = x_circle - sqrt(radius_circle*radius_circle -
+                                                        deltay_source*deltay_source);
+                    float radius_index = abs(x_source - x_intersect) / (shadow_width * SCALING);
+                    if (radius_index < 1.0) return radius_index;
+                }} else {{
+                    float radius_index1 = get_radius_index_smoothstep(i, pos, 0u, shadow_width);
+                    if (radius_index1 < 1.0) return radius_index1;
+                    else {{
+                        float radius_index2 = get_radius_index_smoothstep(i, pos, 1u, shadow_width);
+                        return radius_index2;
+                    }}
+                }}
+            }}
+            return 10.0; // arbitrary number > 1
+        }}
+
+        float get_shadow_ratio(float prev_i, vec2 pos) {{
+            if (prev_i < 0.0) return 10.0; // arbitrary big number
+            uint i = uint(round(prev_i));
+            bool is_straight;
+            bool is_leaf;
+            float straight_leaf = straightleaf_left_radius_convastart_x_y_to_plus[i].x;
+            if (straight_leaf < 0.5) {{
+                is_straight = false;
+                is_leaf = false;
+            }} else {{
+                if (straight_leaf < 1.5) {{
+                    is_straight = false;
+                    is_leaf = true;
+                }} else {{
+                    if (straight_leaf < 2.5) {{
+                        is_straight = true;
+                        is_leaf = false;
+                    }} else {{
+                        is_straight = true;
+                        is_leaf = true;
+                    }}
+                }}
+            }}
+            float source_w;
+            float source_h;
+            float source_x0;
+            float source_y0;
+            if (is_leaf) {{
+                source_w = leaf_w;
+                source_h = leaf_h;
+                source_x0 = leaf_x0;
+                source_y0 = leaf_y0;
+            }} else {{
+                source_w = trunk_w;
+                source_h = trunk_h;
+                source_x0 = trunk_x0;
+                source_y0 = trunk_y0;
+            }}
+            if (is_straight) {{
+                vec2 x_y_source = get_x_y_straight(i, pos);
+                float x_source = x_y_source.x;
+                float y_source = x_y_source.y;
+                float radius_x = x_source - x_circle;
+                float radius_y = y_source - y_circle;
+                float now_radius = sqrt(radius_x*radius_x + radius_y*radius_y);
+                float radius_index = abs(now_radius - radius_circle) / (shadow_width * SCALING);
+                return radius_index;
+            }} else {{
+                float radius_index = get_shadow_ratio_curled(i, pos, source_h, source_y0);
+                return radius_index;
+            }}
         }}
 
         void main() {{
@@ -913,17 +1075,9 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                     source_y0 = trunk_y0;
                 }}
                 if (is_straight) {{
-                    // matrix multiplication
-                    // (x y) (x)
-                    //  z w   y
-                    float x_to_plus = straightleaf_left_radius_convastart_x_y_to_plus[i].z;
-                    float y_to_plus = straightleaf_left_radius_convastart_x_y_to_plus[i].w;
-                    float x_source = center_x_y_bound_min_max_mat[i].x * pos.x +
-                                     center_x_y_bound_min_max_mat[i].y * pos.y +
-                                     x_to_plus;
-                    float y_source = center_x_y_bound_min_max_mat[i].z * pos.x +
-                                     center_x_y_bound_min_max_mat[i].w * pos.y +
-                                     y_to_plus;
+                    vec2 x_y_source = get_x_y_straight(i, pos);
+                    float x_source = x_y_source.x;
+                    float y_source = x_y_source.y;
                     float now_a = get_dist_from_root(x_source,
                                                      y_source,
                                                      source_h,
@@ -932,13 +1086,23 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                                                      source_y0,
                                                      i,
                                                      is_straight);
-                    if (now_a > a) {{
+                    if (now_a > a + MIN_A_DIF) {{
                         a = now_a;
                         float radius_x = x_source - x_circle;
                         float radius_y = y_source - y_circle;
                         float now_radius = sqrt(radius_x*radius_x + radius_y*radius_y);
                         float radius_index = abs(now_radius - radius_circle) / (line_width * SCALING);
                         outColor = get_out_color(radius_index, x_source, y_source);
+                        float prev_left = dist_from_root_beta_prevleft_prevright[i].z;
+                        float prev_right = dist_from_root_beta_prevleft_prevright[i].w;
+                        float shadow_index1 = get_shadow_ratio(prev_left, pos);
+                        if (shadow_index1 < 1.0) {{
+                            outColor = get_shadow_color(shadow_index1);
+                        }}
+                        float shadow_index2 = get_shadow_ratio(prev_right, pos);
+                        if (shadow_index2 < 1.0) {{
+                            outColor = get_shadow_color(shadow_index2);
+                        }}
                     }}
                 }} else {{
                     float center_x = center_x_y_bound_min_max_mat[i].x;
@@ -1007,12 +1171,22 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                                 float radius_index = abs(x_source - x_intersect) / (line_width * SCALING);
                                 outColor = get_out_color(radius_index, x_source, y_source);
                             }} else {{
-                                float radius_index1 = get_radius_index_smoothstep(i, pos, 0u);
+                                float radius_index1 = get_radius_index_smoothstep(i, pos, 0u, line_width);
                                 if (radius_index1 < 1.0) outColor = get_out_color(radius_index1, x_source, y_source);
                                 else {{
-                                    float radius_index2 = get_radius_index_smoothstep(i, pos, 1u);
+                                    float radius_index2 = get_radius_index_smoothstep(i, pos, 1u, line_width);
                                     outColor = get_out_color(radius_index2, x_source, y_source);
                                 }}
+                            }}
+                            float prev_left = dist_from_root_beta_prevleft_prevright[i].z;
+                            float prev_right = dist_from_root_beta_prevleft_prevright[i].w;
+                            float shadow_index1 = get_shadow_ratio(prev_left, pos);
+                            if (shadow_index1 < 1.0) {{
+                                outColor = get_shadow_color(shadow_index1);
+                            }}
+                            float shadow_index2 = get_shadow_ratio(prev_right, pos);
+                            if (shadow_index2 < 1.0) {{
+                                outColor = get_shadow_color(shadow_index2);
                             }}
                         }}
                     }}
@@ -1035,7 +1209,9 @@ pub fn generate_shader_and_arr(width_ratio: f64,
              y_circle,
              radius,
              LINE_WIDTH,
-             ABS_BETA_LIMIT);
+             ABS_BETA_LIMIT,
+             SHADOW_WIDTH,
+             SHADOW_STRENGTH);
     //log(&shader_str_with_value);
     (shader_str_with_value, entities_num)
 }
