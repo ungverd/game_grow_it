@@ -1,9 +1,26 @@
 <html>
   <head>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
+    <script>
+    	
+    	function getPos(e){
+        canvas = document.getElementById("canvas");
+        var rect = canvas.getBoundingClientRect();
+    		x = e.clientX - rect.left;
+    		y = 600 + rect.top - e.clientY;
+    		cursor="Your Mouse Position Is : " + x + " and " + y ;
+    		document.getElementById("displayArea").innerHTML=cursor
+    	}
+    
+    	function stopTracking(){
+    		document.getElementById("displayArea").innerHTML="";
+    	}
+    
+    	</script>
   </head>
   <body>
-    <canvas id="canvas" height="600" width="600"></canvas>
+    <canvas id="canvas" height="600" width="600" onmousemove="getPos(event)" onmouseout="stopTracking()"></canvas>
+    <p id="displayArea"></p>
     <script type="module">
       import init, { render } from './web/pkg/without_a_bundler.js';
 

@@ -1,14 +1,15 @@
-const DEST_REF: i32 = 50;
+const DEST_REF: i32 = 20;
 const LINE_WIDTH: f64 = 2.0;
 const F_DEST_REF: f64 = DEST_REF as f64;
 const PI: f64 = std::f64::consts::PI;
 //const STEM: [[u32; 3]; 6] = [[5,5,1], [2,1,12], [1,11,1], [5,5,5], [11,12,10], [5, 3, 2]]; // [right, left, repeats]
-//const STEM: [[u32; 3]; 8] = [[5,5,1], [2,1,12], [1,11,1], [3,3,2], [5,6,3], [5, 3, 2], [1, 0, 5], [0, 1, 4]];
+const STEM: [[u32; 3]; 8] = [[5,5,1], [2,1,12], [1,11,1], [3,3,2], [5,6,3], [5, 3, 2], [1, 0, 5], [0, 1, 4]];
 //const STEM: [[u32; 3]; 3] = [[5,5,1], [1, 0, 4], [0, 1, 4]];
 //const STEM: [[u32; 3]; 3] = [[5,5,1], [1,2,11], [5,5,1]]; // [right, left, repeats]
 //const STEM: [[u32; 3]; 2] = [[5,5,1], [1,2,11]]; // [right, left, repeats]
-const STEM: [[u32; 3]; 1] = [[12,11,4]]; // [right, left, repeats]
+//const STEM: [[u32; 3]; 1] = [[12,11,4]]; // [right, left, repeats]
 //const STEM: [[u32; 3]; 1] = [[1,1,1]]; // [right, left, repeats]
+//const STEM: [[u32; 3]; 1] = [[1,0,1]]; // [right, left, repeats]
 const SIZE_X: usize = 600; // Needs to be changed according to canvas proportions
 const SIZE_Y: usize = 600; // Needs to be changed according to canvas proportions
 const START_X: i32 = 256;
@@ -356,7 +357,7 @@ fn mat_vec_mul(mat: [[f64; 2]; 2], x: f64, y: f64) -> (f64, f64) {
     (new_x, new_y)
 }
 
-fn xi_ui(theta: f64, r: f64) -> (f64, f64) {
+fn xi_yi(theta: f64, r: f64) -> (f64, f64) {
     let xi = r * theta.cos();
     let yi = r * theta.sin();
     (xi, yi)
@@ -368,7 +369,6 @@ fn x1_y1_scaling2(segment: &Segment,
                   scaling: f64,
                   source_y0: f64,
                   source_h: f64,
-                  conv_angle_start: f64,
                   beta: f64) -> (f64, f64, f64) {
     // scaling is source/dest, source is original texture, dest is final pixels
     let x_circle_scaled = x_circle / scaling;
@@ -380,7 +380,7 @@ fn x1_y1_scaling2(segment: &Segment,
         x1 = -segment.radius + SEMI_W - x_circle_scaled;
     }
     let scaling2 = beta / (source_h / scaling);
-    let y1 = -conv_angle_start / scaling2 - y_circle_scaled + source_y0 / scaling;
+    let y1 = -segment.angle_start / scaling2 - y_circle_scaled + source_y0 / scaling;
     (x1, y1, scaling2)
 }
 
@@ -434,30 +434,39 @@ fn get_intersection_or_parallel(k1_f: f64, k2_f: f64, b_f: f64, k1_s: f64, k2_s:
 fn get_angle_start_angle_diff_r_start_r_diff(p1: &PointForSmoothstep,
                                              p2: &PointForSmoothstep,
                                              x_intersect: f64,
-                                             y_intersect: f64) -> (f64, f64, f64, f64) {
-    let angle_start = (p1.yf - y_intersect).atan2(p1.xf - x_intersect);
-    let angle_stop = (p2.yf - y_intersect).atan2(p2.xf - x_intersect);
-    let mut angle_diff = angle_stop - angle_start;
-
+                                             y_intersect: f64,
+                                             segment: &Segment) -> (f64, f64, f64, f64) {
     let x1 = p1.xf - x_intersect;
     let y1 = p1.yf - y_intersect;
-    let x2 = p1.dfx;
-    let y2 = p1.dfy;
-    let det = x1*y2 - y1*x2;
+    let x2 = p2.xf - x_intersect;
+    let y2 = p2.yf - y_intersect;
+
+    let angle_start = (y1).atan2(x1);
+    let angle_stop = (y2).atan2(x2);
+    let mut angle_diff = angle_stop - angle_start;
+
+    let xd = p1.dfx;
+    let yd = p1.dfy;
+    let det;
+    if segment.left {
+        det = -x1*yd + y1*xd;
+    } else {
+        det = x1*yd - y1*xd;
+    }
     if det > 0.0 && angle_diff > 0.0 {
         angle_diff -= 2.0 * PI;
     } else if det < 0.0 && angle_diff < 0.0 {
         angle_diff += 2.0 * PI;
     }
-    let r_start = (x1 * x1 + x2 * x2).sqrt();
-    let xp2 = p2.xf - x_intersect;
-    let yp2 = p2.yf - y_intersect;
-    let r_stop = (xp2 * xp2 + yp2 * yp2).sqrt();
+    let r_start = (x1 * x1 + y1 * y1).sqrt();
+    let r_stop = (x2 * x2 + y2 * y2).sqrt();
     let r_diff = r_stop - r_start;
     (angle_start, angle_diff, r_start, r_diff)
 }
 
-fn get_values_segment(p1: &PointForSmoothstep, p2: &PointForSmoothstep) -> (f64, f64, f64, f64, f64, f64) {
+fn get_values_segment(p1: &PointForSmoothstep,
+                      p2: &PointForSmoothstep, 
+                      segment: &Segment) -> (f64, f64, f64, f64, f64, f64) {
     let (k1_f, k2_f, b_f) = get_k1_k2_b_perpendicular(&p1);
     let (k1_s, k2_s, b_s) = get_k1_k2_b_perpendicular(&p2);
     let (are_parallel, x_intersect, y_intersect) = get_intersection_or_parallel(k1_f, k2_f, b_f, k1_s, k2_s, b_s);
@@ -467,7 +476,8 @@ fn get_values_segment(p1: &PointForSmoothstep, p2: &PointForSmoothstep) -> (f64,
         let (angle_start, angle_diff, r_start, r_diff) = get_angle_start_angle_diff_r_start_r_diff(&p1,
                                                                                              &p2,
                                                                                              x_intersect,
-                                                                                             y_intersect);
+                                                                                             y_intersect,
+                                                                                             segment);
         (x_intersect, y_intersect, angle_start, angle_diff, r_start, r_diff)
     }
 }
@@ -481,11 +491,10 @@ fn smoothstep_border_algorithm(segment: &Segment,
                           scaling: f64,
                           source_y0: f64,
                           source_h: f64,
-                          conv_angle_start: f64,
                           beta: f64,
                           center_x: f64,
                           center_y: f64,
-                          mut arr: &mut [[f32; BUF_LENGTH]],
+                          arr: &mut [[f32; BUF_LENGTH]],
                           entity_num: usize) {
     let (x1, y1, scaling2) = x1_y1_scaling2(segment,
                                                            x_circle,
@@ -493,16 +502,22 @@ fn smoothstep_border_algorithm(segment: &Segment,
                                                            scaling,
                                                            source_y0,
                                                            source_h,
-                                                           conv_angle_start,
                                                            beta);
-    let theta_interm = theta_min + theta_max / 2.0;
+    let theta_interm = (theta_min + theta_max) / 2.0;
     let radius_scaled = circle_radius / scaling;
     let mut points: Vec<PointForSmoothstep> = vec![];
     let thetas = [theta_max, theta_interm, theta_min];
     for theta in thetas {
-        let (xi, yi) = xi_ui(theta, radius_scaled);
+        let theta_to_use;
+        if segment.left {
+            theta_to_use = PI - theta;
+            //theta_to_use = theta;
+        } else {
+            theta_to_use = theta;
+        }
+        let (xi, yi) = xi_yi(theta_to_use, radius_scaled);
         let (xf, yf) = xfyf(xi, yi, x1, y1, scaling2, center_x, center_y);
-        let (dfx, dfy) = get_dydx(theta, scaling2, x1, y1, radius_scaled);
+        let (dfy, dfx) = get_dydx(theta_to_use, scaling2, x1, y1, radius_scaled);
         let point = PointForSmoothstep{xf, yf, dfx, dfy};
         points.push(point);
     }
@@ -514,7 +529,7 @@ fn smoothstep_border_algorithm(segment: &Segment,
              angle_start,
              angle_diff,
              r_start,
-             r_diff) = get_values_segment(point1, point2);
+             r_diff) = get_values_segment(point1, point2, segment);
         arr[4][entity_num*4 + i*2] = x_intersect as f32;
         arr[4][entity_num*4 + i*2 + 1] = y_intersect as f32;
         arr[5][entity_num*4 + i*2] = angle_start as f32;
@@ -629,7 +644,6 @@ fn populate_leaf(rect: &Rect,
                           scaling,
                           source_y0,
                           source_h,
-                          conv_angle_start,
                           beta,
                           center_x,
                           center_y,
@@ -847,7 +861,7 @@ pub fn generate_shader_and_arr(width_ratio: f64,
                     angle -= PI * 2.0;
             }}
             float x2 = angle - angle_start;
-            if (x2 < 0.0 || x2 > w) return 10.0; // just arbitrary number > 1
+            if (abs(x2  - w/2.0) > abs(w/2.0)) return 10.0; // just arbitrary number > 1
             float y_ref = my_smoothstep(x2, w, h);
             return abs(y_ref - y2) / line_width;
         }}
@@ -855,6 +869,7 @@ pub fn generate_shader_and_arr(width_ratio: f64,
         void main() {{
             float a = - MIN_A_DIF * 2.0;
             vec2 pos = gl_FragCoord.xy / vec2(canvas_w / CANVAS_REF_WIDTH, canvas_w / CANVAS_REF_WIDTH);
+            
             for (uint i=0u; i < rectCount; i++) {{
                 if (pos.x < position_size[i].x ||
                     pos.y < position_size[i].y ||
