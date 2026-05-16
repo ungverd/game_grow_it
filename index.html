@@ -17,30 +17,114 @@
     	}
     
     	</script>
+      <style>
+        .triangleUp {
+          width: 30px;
+          aspect-ratio: 1/cos(30deg);
+          clip-path: polygon(50% 0,100% 100%,0 100%);
+          background: linear-gradient(45deg,#5b7a41,#26ac48);
+        }
+        .triangleDown {
+          width: 30px;
+          aspect-ratio: 1/cos(30deg);
+          clip-path: polygon(0 0,100% 0,50% 100%);
+          background: linear-gradient(45deg,#5b7a41,#26ac48);
+        }
+        .blockOfBlocks {
+          display: inline-block;
+        }
+        .number {
+          display: flex;
+          justify-content: center;
+        }
+        .atCenter {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
+        .button {
+          display: block;
+        }
+        .globalBlock {
+          width: 600;
+        }
+    </style>
   </head>
   <body>
     <canvas id="canvas" height="600" width="600" onmousemove="getPos(event)" onmouseout="stopTracking()"></canvas>
+    <div class="globalBlock">
+      <div class="atCenter">
+        <div class="blockOfBlocks">
+          <div class="triangleUp" id="upLeft"></div>
+          <div class="number" id="left">0</div>
+          <div class="triangleDown" id="downLeft"></div>
+        </div>
+        <div class="blockOfBlocks">
+          <div class="triangleUp" id="upRight"></div>
+          <div class="number" id="right">0</div>
+          <div class="triangleDown" id="downRight"></div>
+        </div>
+      </div>
+      <div class="atCenter">
+        <div  class="blockOfBlocks">
+          <button id="growButton" class="button"> Grow! </button>
+          <button id="undoButton" class="button"> Undo </button>
+        </div>
+      </div>
+    </div>
     <p id="displayArea"></p>
     <script type="module">
-      import init, { render } from './web/pkg/without_a_bundler.js';
+      import init, { GameState } from './web/pkg/without_a_bundler.js';
 
       async function run() {
         await init();
+        let gamestate = GameState.new();
         const response = await fetch('./leaf6_blurred_square.json');
         const json = await response.json();
         const fname = json.fname;
         var image = new Image();
         image.src = `./${fname}`;
         image.onload = function() {
-          render(image,
-                 json.xmax_ratio,
-                 json.ymax_ratio,
-                 json.trunk_ratio,
-                 json.x_circle,
-                 json.y_circle,
-                 json.radius,
-                 json.theta_max,
-                 json.theta_min);
+          gamestate.do_shader_stuff_and_constants(image,
+                                                  json.xmax_ratio,
+                                                  json.ymax_ratio,
+                                                  json.trunk_ratio,
+                                                  json.x_circle,
+                                                  json.y_circle,
+                                                  json.radius,
+                                                  json.theta_max,
+                                                  json.theta_min);
+          let left = document.getElementById("left");
+          let right = document.getElementById("right");
+          function onUpLeft(e) {
+            left.innerHTML = gamestate.left_plus();
+          }
+          document.getElementById("upLeft").onclick = onUpLeft;
+
+          function onUpRight(e) {
+            right.innerHTML = gamestate.right_plus();
+          }
+          document.getElementById("upRight").onclick = onUpRight;
+
+          function onDownLeft(e) {
+            left.innerHTML = gamestate.left_minus();
+          }
+          document.getElementById("downLeft").onclick = onDownLeft;
+
+          function onDownRight(e) {
+            right.innerHTML = gamestate.right_minus();
+          }
+          document.getElementById("downRight").onclick = onDownRight;
+
+          function onGrow(e) {
+            gamestate.grow_tree();
+          }
+          document.getElementById("growButton").onclick = onGrow;
+
+          function onUndo(e) {
+            gamestate.undo_grow_tree();
+          }
+          document.getElementById("undoButton").onclick = onUndo;
         }
       }
 

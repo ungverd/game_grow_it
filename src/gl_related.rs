@@ -1,28 +1,5 @@
 use wasm_bindgen::prelude::*;
-use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
-
-#[wasm_bindgen]
-extern "C" {
-    pub fn alert(s: &str);
-}
-
-#[wasm_bindgen]
-extern "C" {
-    // Use `js_namespace` here to bind `console.log(..)` instead of just
-    // `log(..)`
-    #[wasm_bindgen(js_namespace = console)]
-    pub fn log(s: &str);
-
-    // The `console.log` is quite polymorphic, so we can bind it with multiple
-    // signatures. Note that we need to use `js_name` to ensure we always call
-    // `log` in JS.
-    #[wasm_bindgen(js_namespace = console, js_name = log)]
-    pub fn log_u32(a: u32);
-
-    // Multiple arguments too!
-    #[wasm_bindgen(js_namespace = console, js_name = log)]
-    pub fn log_many(a: &str, b: &str);
-}
+use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader, WebGlUniformLocation};
 
 pub fn get_context_and_canvas_width() -> Result<(WebGl2RenderingContext, f32), JsValue> {
     let document = web_sys::window().unwrap().document().unwrap();
@@ -36,17 +13,12 @@ pub fn get_context_and_canvas_width() -> Result<(WebGl2RenderingContext, f32), J
     Ok((context, canvas_width))
 }
 
-#[wasm_bindgen]
 pub fn prepare_gl(img: web_sys::HtmlImageElement,
-                  tree_shader_str: &str) -> Result<(), JsValue> {
-    let document = web_sys::window().unwrap().document().unwrap();
-    let canvas = document.get_element_by_id("canvas").unwrap();
-    let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
-    let canvas_width = canvas.width() as f32;
-    let context = canvas
-        .get_context("webgl2")?
-        .unwrap()
-        .dyn_into::<WebGl2RenderingContext>()?;
+                  tree_shader_str: &str,
+                  context:  &WebGl2RenderingContext) -> Result<(Option<WebGlUniformLocation>,
+                                                                Option<WebGlUniformLocation>,
+                                                                i32,
+                                                                WebGlProgram), JsValue> {
 
     let vert_shader = compile_shader(
         &context,
@@ -154,12 +126,14 @@ pub fn prepare_gl(img: web_sys::HtmlImageElement,
     Ok(()) => (),
     Err(val) => {return Err(val)}
     };
-    Ok(())
+    let rect_count_index = context.get_uniform_location(&program, "rectCount");
+    let canvas_w_index = context.get_uniform_location(&program, "canvas_w");
+    Ok((rect_count_index, canvas_w_index, vert_count, program))
 
 }
 
 
-fn draw(context: &WebGl2RenderingContext, vert_count: i32) {
+pub fn draw(context: &WebGl2RenderingContext, vert_count: i32) {
     context.clear_color(0.0, 0.0, 0.0, 1.0);
     context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
@@ -239,7 +213,6 @@ pub fn bind_ubos_for_tree(arr: &[[f32; crate::BUF_LENGTH]],
 
         // Bind it to tell WebGL we are working on this buffer
         context.bind_buffer(WebGl2RenderingContext::UNIFORM_BUFFER, Some(&ubo_buffer));
-
         unsafe {
             let rects_array_buf_view = js_sys::Float32Array::view(rects_arr);
 

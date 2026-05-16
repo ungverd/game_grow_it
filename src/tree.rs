@@ -15,7 +15,7 @@ const PI: f64 = std::f64::consts::PI;
 //const STEM: [[u32; 3]; 1] = [[1,0,1]]; // [right, left, repeats]
 const SIZE_X: usize = 600; // Needs to be changed according to canvas proportions
 const SIZE_Y: usize = 600; // Needs to be changed according to canvas proportions
-const START_X: i32 = 256;
+const START_X: i32 = 300;
 const START_Y: i32 = 1;
 const LEFT_BOOL: bool = true;
 const RIGHT_BOOL: bool = false;
@@ -233,7 +233,7 @@ fn get_segments(w: f64, stem: &Vec<crate::TreeUnit>) -> Vec<Segment> {
             }
             if right == 0 {
                 center_bottom_x_global = center_bottom_x_left;
-                center_bottom_y_global = center_bottom_y_left + center_bottom_y_right;
+                center_bottom_y_global = center_bottom_y_left; //+ center_bottom_y_right
             } else if left == 0 {
                 center_bottom_x_global = center_bottom_x_right;
                 center_bottom_y_global = center_bottom_y_right;
@@ -889,6 +889,7 @@ impl crate::GameState {
             }}
 
             float get_shadow_ratio_curled(uint i, vec2 pos, float source_h, float source_y0) {{
+                float beta = dist_from_root_beta_prevleft_prevright[i].y;
                 if (abs(beta) > ABS_BETA_LIMIT - 0.0001) {{ // a bit arbitrary value where fancy algorithm doesn't work well
                     float center_x = center_x_y_bound_min_max_mat[i].x;
                     float center_y = center_x_y_bound_min_max_mat[i].y;
@@ -897,7 +898,6 @@ impl crate::GameState {
                     float left = straightleaf_left_radius_convastart_x_y_to_plus[i].y;
                     float radius = straightleaf_left_radius_convastart_x_y_to_plus[i].z;
                     float converted_angle_start = straightleaf_left_radius_convastart_x_y_to_plus[i].w;
-                    float beta = dist_from_root_beta_prevleft_prevright[i].y;
 
                     float deltax = pos.x - center_x;
                     float deltay = pos.y - center_y;
@@ -1226,6 +1226,9 @@ impl crate::GameState {
                     prev_right);
             let this_num = entities_num as i32;
             entities_num += 1;
+            if entities_num >= crate::MAX_RECTS {
+                crate::alert("You reached the maximum plant size on this stahe. It's impressive! But now you need to restart");
+            }
             let trunk_segment_num = get_trunk_segment(&segments, segment_num);
             if trunk_segment_num >= 0 {
                 let trunk_segment = &segments[trunk_segment_num as usize];
@@ -1249,6 +1252,9 @@ impl crate::GameState {
                     prev_left,
                     prev_right);
                 entities_num += 1;
+                if entities_num >= crate::MAX_RECTS {
+                    crate::alert("You reached the maximum plant size on this stage. It's impressive! But now you need to restart :(");
+                }
             }
             if leaf_segment.left {
                 prev_left = this_num;
