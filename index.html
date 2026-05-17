@@ -79,52 +79,60 @@
       async function run() {
         await init();
         let gamestate = GameState.new();
-        const response = await fetch('./leaf6_blurred_square.json');
-        const json = await response.json();
-        const fname = json.fname;
-        var image = new Image();
-        image.src = `./${fname}`;
-        image.onload = function() {
-          gamestate.do_shader_stuff_and_constants(image,
-                                                  json.xmax_ratio,
-                                                  json.ymax_ratio,
-                                                  json.trunk_ratio,
-                                                  json.x_circle,
-                                                  json.y_circle,
-                                                  json.radius,
-                                                  json.theta_max,
-                                                  json.theta_min);
-          let left = document.getElementById("left");
-          let right = document.getElementById("right");
-          function onUpLeft(e) {
-            left.innerHTML = gamestate.left_plus();
-          }
-          document.getElementById("upLeft").onclick = onUpLeft;
+        const response_leaf = await fetch('./leaf6_blurred_square.json');
+        const json_leaf = await response_leaf.json();
+        const fname_leaf = json_leaf.fname;
+        var image_leaf = new Image();
+        image_leaf.src = `./${fname_leaf}`;
+        image_leaf.onload = async function() {
+          const response_monkey = await fetch('./monkey_anim_L.json');
+          const json_monkey = await response_monkey.json();
+          const fname_monkey = json_monkey.fname;
+          var image_monkey = new Image();
+          image_monkey.src = `./${fname_monkey}`;
+          image_monkey.onload = function () {
+            gamestate.do_shader_stuff_and_constants(image_leaf,
+                                                    image_monkey,
+                                                    json_leaf.xmax_ratio,
+                                                    json_leaf.ymax_ratio,
+                                                    json_leaf.trunk_ratio,
+                                                    json_leaf.x_circle,
+                                                    json_leaf.y_circle,
+                                                    json_leaf.radius,
+                                                    json_leaf.theta_max,
+                                                    json_leaf.theta_min);
+            let left = document.getElementById("left");
+            let right = document.getElementById("right");
+            function onUpLeft(e) {
+              left.innerHTML = gamestate.left_plus();
+            }
+            document.getElementById("upLeft").onclick = onUpLeft;
 
-          function onUpRight(e) {
-            right.innerHTML = gamestate.right_plus();
-          }
-          document.getElementById("upRight").onclick = onUpRight;
+            function onUpRight(e) {
+              right.innerHTML = gamestate.right_plus();
+            }
+            document.getElementById("upRight").onclick = onUpRight;
 
-          function onDownLeft(e) {
-            left.innerHTML = gamestate.left_minus();
-          }
-          document.getElementById("downLeft").onclick = onDownLeft;
+            function onDownLeft(e) {
+              left.innerHTML = gamestate.left_minus();
+            }
+            document.getElementById("downLeft").onclick = onDownLeft;
 
-          function onDownRight(e) {
-            right.innerHTML = gamestate.right_minus();
-          }
-          document.getElementById("downRight").onclick = onDownRight;
+            function onDownRight(e) {
+              right.innerHTML = gamestate.right_minus();
+            }
+            document.getElementById("downRight").onclick = onDownRight;
 
-          function onGrow(e) {
-            gamestate.grow_tree();
-          }
-          document.getElementById("growButton").onclick = onGrow;
+            function onGrow(e) {
+              gamestate.grow_tree();
+            }
+            document.getElementById("growButton").onclick = onGrow;
 
-          function onUndo(e) {
-            gamestate.undo_grow_tree();
+            function onUndo(e) {
+              gamestate.undo_grow_tree();
+            }
+            document.getElementById("undoButton").onclick = onUndo;
           }
-          document.getElementById("undoButton").onclick = onUndo;
         }
       }
 

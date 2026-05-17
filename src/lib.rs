@@ -1,5 +1,5 @@
 use wasm_bindgen::prelude::*;
-use web_sys::{WebGl2RenderingContext, WebGlUniformLocation};
+use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlUniformLocation, WebGlVertexArrayObject};
 mod tree;
 mod gl_related;
 
@@ -49,6 +49,7 @@ pub struct TreeUnit {
 struct Monkey {
     x_pos: f64,
     is_running: bool,
+    is_left: bool,
 }
 
 #[wasm_bindgen]
@@ -73,13 +74,17 @@ pub struct GameState {
     canvas_width: f32,
     gl_params: GlParameters,
     tree_state: TreeState,
+    monkey_running_program: Option<WebGlProgram>,
+    leaf_program: Option<WebGlProgram>,
+    monkey_vao: Option<WebGlVertexArrayObject>,
+    leaf_vao: Option<WebGlVertexArrayObject>
 }
 
 #[wasm_bindgen]
 impl GameState {
     pub fn new() -> Result<GameState, JsValue> {
         let tree: Vec<TreeUnit> = vec![]; 
-        let monkey = Monkey{x_pos: 300.0, is_running: false};
+        let monkey = Monkey{x_pos: 200.0, is_running: false, is_left: false};
         let drawing_params = tree::DrawingParams{scaling: 0.0,
                                                                 trunk_w: 0.0,
                                                                 trunk_h: 0.0,
@@ -120,6 +125,10 @@ impl GameState {
             canvas_width,
             gl_params,
             tree_state,
+            monkey_running_program: None,
+            leaf_program: None,
+            monkey_vao: None,
+            leaf_vao: None,
         })
     }
 
@@ -152,7 +161,8 @@ impl GameState {
     }
 
     pub fn do_shader_stuff_and_constants(&mut self,
-                                         img: web_sys::HtmlImageElement,
+                                         img_leaf: web_sys::HtmlImageElement,
+                                         img_monkey: web_sys::HtmlImageElement,
                                          width_ratio: f64,
                                          height_ratio: f64,
                                          trunk_ratio: f64,
@@ -172,14 +182,23 @@ impl GameState {
                                                                           theta_min);
         let (rect_count_index,
              canvas_w_index,
-             vert_count,
-             program) = gl_related::prepare_gl(img,
+             program,
+             leaf_vao) = gl_related::prepare_gl(img_leaf,
                                                       &shader_str,
                                                       &self.context)?;
-        gl_related::bind_ubos_for_tree(&self.ubos_arr, &self.context, Some(&program), true)?;
+        self.leaf_vao = Some(leaf_vao);
+        self.leaf_program = Some(program);
+        gl_related::bind_ubos_for_tree(&self.ubos_arr, &self.context, self.leaf_program.as_ref(), true)?;
         self.gl_params.rect_count_index = rect_count_index;
         self.gl_params.canvas_w_index = canvas_w_index;
-        self.gl_params.vert_count = vert_count;
+        self.gl_params.vert_count = 6; // TODO change to meaningful!
+        let (monkey_running_program,
+            monkey_vao) = gl_related::prepare_monkey(img_monkey,
+                                                                             &self.context,
+                                                                             self.monkey.x_pos as f32,
+                                                                             1.0)?;
+        self.monkey_running_program = Some(monkey_running_program);
+        self.monkey_vao = Some(monkey_vao);
         Ok(())
     }
 
@@ -224,12 +243,22 @@ impl GameState {
     }
 
     fn draw_tree(&mut self) -> Result<(), JsValue> {
+        self.context.use_program(self.leaf_program.as_ref());
+        self.context.bind_vertex_array(self.leaf_vao.as_ref());
         let rects_count = self.populate_arr();
         gl_related::bind_ubos_for_tree(&self.ubos_arr, &self.context, None, false)?;
         self.context.uniform1ui(self.gl_params.rect_count_index.as_ref(), rects_count as u32);
         self.context.uniform1f(self.gl_params.canvas_w_index.as_ref(), self.canvas_width);
 
-        gl_related::draw(&self.context, self.gl_params.vert_count);
+        gl_related::draw(&self.context, 6, true, 0);
+        self.draw_monkey()?;
+        Ok(())
+    }
+
+    pub fn draw_monkey(&self) -> Result<(), JsValue> {
+        self.context.use_program(self.monkey_running_program.as_ref());
+        self.context.bind_vertex_array(self.monkey_vao.as_ref());
+        gl_related::draw(&self.context, 6, false, 0);
         Ok(())
     }
 }
