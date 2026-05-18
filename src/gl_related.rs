@@ -338,16 +338,11 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
         out vec4 outColor;
         
         void main() {
-            //outColor = vec4(0.5, 0.5, 0.5, 1.0);
-            float result_color = 1.0 - texture(monkey_image, v_texCoord).x;
-            //if (texture(monkey_image, v_texCoord.xy).x > 0.5) {
-            //    outColor = vec4(0.0, 0.0, 0.0, 0.0);
-            //}
-            //outColor = v_texCoord;
-            if (result_color < 0.5) {
-                outColor = vec4(result_color, result_color, result_color, 1.0);
+            if (texture(monkey_image, v_texCoord).x > 0.5) {
+                outColor = vec4(0.0, 0.0, 0.0, 1.0);
+            } else {
+                discard;
             }
-            //outColor = texture(monkey_image, v_texCoord);
         }"##,
     )?;
     let program = link_program(&context, &vert_shader, &frag_shader)?;
