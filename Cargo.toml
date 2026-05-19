@@ -21,6 +21,7 @@ features = [
   'HtmlCanvasElement',
   'HtmlImageElement',
   'WebGlBuffer',
+  'WebGlFramebuffer',
   'WebGlVertexArrayObject',
   'WebGl2RenderingContext',
   'WebGlProgram',

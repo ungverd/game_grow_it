@@ -1,5 +1,8 @@
 use wasm_bindgen::prelude::*;
-use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader, WebGlUniformLocation, WebGlVertexArrayObject};
+use web_sys::{WebGl2RenderingContext, WebGlBuffer, WebGlFramebuffer, WebGlProgram, WebGlShader, WebGlUniformLocation, WebGlVertexArrayObject};
+
+pub const TARGET_TEXTURE_WIDTH: i32 = 600;
+pub const TARGET_TEXTURE_HEIGHT: i32 = 600;
 
 pub fn get_context_and_canvas_width() -> Result<(WebGl2RenderingContext, f32), JsValue> {
     let document = web_sys::window().unwrap().document().unwrap();
@@ -18,7 +21,8 @@ pub fn prepare_gl(img: web_sys::HtmlImageElement,
                   context:  &WebGl2RenderingContext) -> Result<(Option<WebGlUniformLocation>,
                                                                 Option<WebGlUniformLocation>,
                                                                 WebGlProgram,
-                                                                WebGlVertexArrayObject), JsValue> {
+                                                                WebGlVertexArrayObject,
+                                                                WebGlFramebuffer), JsValue> {
 
     let vert_shader = compile_shader(
         &context,
@@ -42,7 +46,12 @@ pub fn prepare_gl(img: web_sys::HtmlImageElement,
     let program = link_program(&context, &vert_shader, &frag_shader)?;
     context.use_program(Some(&program));
 
-    let vertices: [f32; 18] = [-1.0, -1.0, 0.0, 1.0, -1.0, 0.0, -1.0, 1.0, 0.0, 1.0, -1.0, 0.0, 1.0, 1.0, 0.0, -1.0, 1.0, 0.0];
+    let vertices: [f32; 12] = [-1.0, -1.0,
+                               1.0, -1.0,
+                               -1.0, 1.0,
+                               1.0, -1.0,
+                               1.0, 1.0,
+                               -1.0, 1.0];
 
     let position_attribute_location = context.get_attrib_location(&program, "position");
     let buffer = context.create_buffer().ok_or("Failed to create buffer")?;
@@ -73,17 +82,13 @@ pub fn prepare_gl(img: web_sys::HtmlImageElement,
 
     context.vertex_attrib_pointer_with_i32(
         position_attribute_location as u32,
-        3,
+        2,
         WebGl2RenderingContext::FLOAT,
         false,
         0,
         0,
     );
     context.enable_vertex_attrib_array(position_attribute_location as u32);
-
-    context.bind_vertex_array(Some(&vao));
-
-    let vert_count = (vertices.len() / 3) as i32;
 
     let texture = context.create_texture().expect("Cannot create gl texture");
     let level = 0;
@@ -130,7 +135,64 @@ pub fn prepare_gl(img: web_sys::HtmlImageElement,
     let canvas_w_index = context.get_uniform_location(&program, "canvas_w");
     let leaf_texture_index = context.get_uniform_location(&program, "u_image");
     context.uniform1i(leaf_texture_index.as_ref(), 0);
-    Ok((rect_count_index, canvas_w_index, program, vao))
+ 
+    // Creating texture to draw tree in!
+    let texture_to_buffer = context.create_texture().expect("Cannot create gl texture");
+    let level = 0;
+    let internal_format = WebGl2RenderingContext::RGBA;
+    let src_format = WebGl2RenderingContext::RGBA;
+    let src_type = WebGl2RenderingContext::UNSIGNED_BYTE;
+
+    context.active_texture(WebGl2RenderingContext::TEXTURE1);
+    context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&texture_to_buffer));
+    context.tex_parameteri(
+        WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_WRAP_S,
+        WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+    );
+    context.tex_parameteri(
+        WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_WRAP_T,
+        WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+    );
+    context.tex_parameteri(
+        WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+        WebGl2RenderingContext::NEAREST as i32,
+    );
+    context.tex_parameteri(
+        WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+        WebGl2RenderingContext::NEAREST as i32,
+    );
+    let err = context.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+                WebGl2RenderingContext::TEXTURE_2D,
+                level,
+                internal_format as i32,
+                TARGET_TEXTURE_WIDTH,
+                TARGET_TEXTURE_HEIGHT,
+                0,
+                src_format,
+                src_type,
+                None
+            );
+    match err {
+    Ok(()) => (),
+    Err(val) => {return Err(val)}
+    };
+    // Create and bind the framebuffer
+    let fb = context.create_framebuffer().expect("Cannot create gl texture");
+    context.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fb));
+ 
+    // attach the texture as the first color attachment
+    let attachment_point = WebGl2RenderingContext::COLOR_ATTACHMENT0;
+    context.framebuffer_texture_2d(WebGl2RenderingContext::FRAMEBUFFER,
+                                 attachment_point,
+                                 WebGl2RenderingContext::TEXTURE_2D,
+                                 Some(&texture_to_buffer),
+                                 level);
+
+    Ok((rect_count_index, canvas_w_index, program, vao, fb))
 
 }
 
@@ -238,33 +300,12 @@ pub fn bind_ubos_for_tree(arr: &[[f32; crate::BUF_LENGTH]],
     Ok(())
 }
 
-pub fn populate_vertex_array(context:  &WebGl2RenderingContext,
-                             monkey_x: f32,
-                             monkey_y: f32,
-                             program_monkey: Option<&WebGlProgram>) -> Result<WebGlVertexArrayObject, JsValue> {
-
-    let screen_width = 600.0 as f32;
-    let screen_height = 600.0;
-    let monkey_width = 105.0;
-    let monkey_height = 73.0;
-    let monkey_scaling = 1.0;
-    let monkey_width_screen = monkey_width * monkey_scaling;
-    let monkey_height_screen = monkey_height * monkey_scaling;
-    let x_desired_left = (monkey_x - monkey_width_screen / 2.0) * 2.0 / screen_width - 1.0;
-    let x_desired_right = (monkey_x + monkey_width_screen / 2.0) * 2.0 / screen_width - 1.0;
-    let y_desired_bottom = monkey_y * 2.0 / screen_height - 1.0;
-    let y_desired_top = (monkey_y + monkey_height_screen) * 2.0 / screen_height - 1.0;
-    let vertices: [f32; 18] = [ x_desired_left,  y_desired_bottom, 0.0,
-                                x_desired_right, y_desired_bottom, 0.0,
-                                x_desired_left,  y_desired_top, 0.0,
-                                x_desired_right, y_desired_bottom, 0.0,
-                                x_desired_right, y_desired_top, 0.0,
-                                x_desired_left,  y_desired_top, 0.0];
-    context.use_program(program_monkey);
-    
-    let position_attribute_location = context.get_attrib_location(program_monkey.unwrap(), "position");
-    let buffer = context.create_buffer().ok_or("Failed to create buffer")?;
-    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
+pub fn apply_arrays_monkey(context:  &WebGl2RenderingContext,
+                           monkey_vertex_array: &[f32],
+                           monkey_texture_array: &[f32],
+                           monkey_vertex_buffer: Option<&WebGlBuffer>,
+                           monkey_tex_coord_buffer: Option<&WebGlBuffer>,) {
+    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, monkey_vertex_buffer);
 
     // Note that `Float32Array::view` is somewhat dangerous (hence the
     // `unsafe`!). This is creating a raw view into our module's
@@ -275,41 +316,43 @@ pub fn populate_vertex_array(context:  &WebGl2RenderingContext,
     // As a result, after `Float32Array::view` we have to be very careful not to
     // do any memory allocations before it's dropped.
     unsafe {
-        let positions_array_buf_view = js_sys::Float32Array::view(&vertices);
+        let positions_array_buf_view = js_sys::Float32Array::view(monkey_vertex_array);
 
         context.buffer_data_with_array_buffer_view(
             WebGl2RenderingContext::ARRAY_BUFFER,
             &positions_array_buf_view,
-            WebGl2RenderingContext::STATIC_DRAW,
+            WebGl2RenderingContext::DYNAMIC_DRAW,
         );
     }
+    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, monkey_tex_coord_buffer);
 
-    let vao = context
-        .create_vertex_array()
-        .ok_or("Could not create vertex array object")?;
-    context.bind_vertex_array(Some(&vao));
+    // Note that `Float32Array::view` is somewhat dangerous (hence the
+    // `unsafe`!). This is creating a raw view into our module's
+    // `WebAssembly.Memory` buffer, but if we allocate more pages for ourself
+    // (aka do a memory allocation in Rust) it'll cause the buffer to change,
+    // causing the `Float32Array` to be invalid.
+    //
+    // As a result, after `Float32Array::view` we have to be very careful not to
+    // do any memory allocations before it's dropped.
+    unsafe {
+        let tex_coords_array_buf_view = js_sys::Float32Array::view(monkey_texture_array);
 
-
-    context.vertex_attrib_pointer_with_i32(
-        position_attribute_location as u32,
-        3,
-        WebGl2RenderingContext::FLOAT,
-        false,
-        0,
-        0,
-    );
-    context.enable_vertex_attrib_array(position_attribute_location as u32);
-
-    context.bind_vertex_array(Some(&vao));
-
-    //let vert_count = (vertices.len() / 2) as i32;
-    Ok(vao)
+        context.buffer_data_with_array_buffer_view(
+            WebGl2RenderingContext::ARRAY_BUFFER,
+            &tex_coords_array_buf_view,
+            WebGl2RenderingContext::DYNAMIC_DRAW,
+        );
+    }
+    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
 }
 
 pub fn prepare_monkey(img: web_sys::HtmlImageElement,
                       context:  &WebGl2RenderingContext,
-                      monkey_x: f32,
-                      monkey_y: f32) -> Result<(WebGlProgram, WebGlVertexArrayObject), JsValue> {
+                      monkey_vertex_array: &[f32],
+                      monkey_texture_array: &[f32],) -> Result<(WebGlProgram,
+                                                                WebGlVertexArrayObject,
+                                                                WebGlBuffer,
+                                                                WebGlBuffer,), JsValue> {
     let vert_shader = compile_shader(
         &context,
         WebGl2RenderingContext::VERTEX_SHADER,
@@ -347,30 +390,11 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     )?;
     let program = link_program(&context, &vert_shader, &frag_shader)?;
     context.use_program(Some(&program));
-
-    // Populate all these values from json in the future
-    let screen_width = 600.0 as f32;
-    let screen_height = 600.0;
-    let monkey_width = 105.0;
-    let monkey_height = 73.0;
-    let monkey_scaling = 1.0;
-    let monkey_width_screen = monkey_width * monkey_scaling;
-    let monkey_height_screen = monkey_height * monkey_scaling;
-    let x_desired_left = (monkey_x - monkey_width_screen / 2.0) * 2.0 / screen_width - 1.0;
-    let x_desired_right = (monkey_x + monkey_width_screen / 2.0) * 2.0 / screen_width - 1.0;
-    let y_desired_bottom = monkey_y * 2.0 / screen_height - 1.0;
-    let y_desired_top = (monkey_y + monkey_height_screen) * 2.0 / screen_height - 1.0;
-    let vertices: [f32; 18] = [ x_desired_left,  y_desired_bottom, 0.0,
-                                x_desired_right, y_desired_bottom, 0.0,
-                                x_desired_left,  y_desired_top, 0.0,
-                                x_desired_right, y_desired_bottom, 0.0,
-                                x_desired_right, y_desired_top, 0.0,
-                                x_desired_left,  y_desired_top, 0.0];
     
     let position_attribute_location = context.get_attrib_location(&program, "position");
     crate::log(&format!("position_attribute_location {:?}", position_attribute_location));
-    let buffer = context.create_buffer().ok_or("Failed to create buffer")?;
-    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
+    let positions_buffer = context.create_buffer().ok_or("Failed to create buffer")?;
+    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&positions_buffer));
 
     // Note that `Float32Array::view` is somewhat dangerous (hence the
     // `unsafe`!). This is creating a raw view into our module's
@@ -381,7 +405,7 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     // As a result, after `Float32Array::view` we have to be very careful not to
     // do any memory allocations before it's dropped.
     unsafe {
-        let positions_array_buf_view = js_sys::Float32Array::view(&vertices);
+        let positions_array_buf_view = js_sys::Float32Array::view(monkey_vertex_array);
 
         context.buffer_data_with_array_buffer_view(
             WebGl2RenderingContext::ARRAY_BUFFER,
@@ -398,7 +422,7 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
 
     context.vertex_attrib_pointer_with_i32(
         position_attribute_location as u32,
-        3,
+        2,
         WebGl2RenderingContext::FLOAT,
         false,
         0,
@@ -408,25 +432,6 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
 
     context.bind_vertex_array(Some(&vao));
 
-    //let vert_count = (vertices.len() / 2) as i32;
-
-    let monkey_width = 105.0;
-    let monkey_height = 73.0;
-    let texture_width = 1024.0 as f32;
-    let texture_height = 1024.0;
-    let monkey_frame_vert = 7.0;
-    let monkey_frame_hor = 5.0;
-    let x_coord_left = monkey_frame_hor * monkey_width / texture_width; 
-    let x_coord_right = ((monkey_frame_hor + 1.0) * monkey_width - 1.0) / texture_width; 
-    let y_coord_bottom = monkey_frame_vert * monkey_height / texture_height; 
-    let y_coord_top = ((monkey_frame_vert + 1.0) * monkey_height - 1.0) /texture_height;
-    crate::log(&format!("{:?} {:?} {:?} {:?}", x_coord_left, x_coord_right, y_coord_bottom, y_coord_top));
-    let texture_coords: [f32; 12] = [x_coord_left,  y_coord_bottom,
-                                x_coord_right, y_coord_bottom,
-                                x_coord_left,  y_coord_top,
-                                x_coord_right, y_coord_bottom,
-                                x_coord_right, y_coord_top,
-                                x_coord_left,  y_coord_top,];
     /*let texture_coords: [f32; 12] = [0.0, 0.0, 
                                      1.0, 0.0,
                                      0.0, 1.0,
@@ -435,8 +440,8 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
                                      0.0, 1.0];  */                          
     let tex_coord_attribute_location = context.get_attrib_location(&program, "a_texCoord");
     crate::log(&format!("tex_coord {:?}", tex_coord_attribute_location));
-    let buffer = context.create_buffer().ok_or("Failed to create buffer")?;
-    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
+    let tex_coord_buffer = context.create_buffer().ok_or("Failed to create buffer")?;
+    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&tex_coord_buffer));
 
     // Note that `Float32Array::view` is somewhat dangerous (hence the
     // `unsafe`!). This is creating a raw view into our module's
@@ -447,7 +452,7 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     // As a result, after `Float32Array::view` we have to be very careful not to
     // do any memory allocations before it's dropped.
     unsafe {
-        let texture_coords_array_buf_view = js_sys::Float32Array::view(&texture_coords);
+        let texture_coords_array_buf_view = js_sys::Float32Array::view(monkey_texture_array);
 
         context.buffer_data_with_array_buffer_view(
             WebGl2RenderingContext::ARRAY_BUFFER,
@@ -471,7 +476,7 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     let src_format = WebGl2RenderingContext::RED;
     let src_type = WebGl2RenderingContext::UNSIGNED_BYTE;
 
-    context.active_texture(WebGl2RenderingContext::TEXTURE1);
+    context.active_texture(WebGl2RenderingContext::TEXTURE2);
     context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&texture));
     context.tex_parameteri(
         WebGl2RenderingContext::TEXTURE_2D,
@@ -507,6 +512,126 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     Err(val) => {return Err(val)}
     };
     let monkey_texture_index = context.get_uniform_location(&program, "monkey_image");
-    context.uniform1i(monkey_texture_index.as_ref(), 1);
+    context.uniform1i(monkey_texture_index.as_ref(), 2);
+    Ok((program, vao, positions_buffer, tex_coord_buffer))
+}
+
+pub fn prepare_to_draw_background(context: &WebGl2RenderingContext) -> Result<(WebGlProgram,
+                                                                               WebGlVertexArrayObject), JsValue> {
+    let vert_shader = compile_shader(
+        &context,
+        WebGl2RenderingContext::VERTEX_SHADER,
+        r##"#version 300 es
+ 
+        in vec4 position;
+        in vec2 a_texCoord;
+        out vec2 v_texCoord;
+
+        void main() {
+            gl_Position = position;
+            v_texCoord = a_texCoord;
+        }
+        "##,
+    )?;
+
+    let frag_shader = compile_shader(
+        &context,
+        WebGl2RenderingContext::FRAGMENT_SHADER,
+        r##"#version 300 es
+    
+        precision mediump float;
+        uniform sampler2D background_image;
+        
+        in vec2 v_texCoord;
+        out vec4 outColor;
+        
+        void main() {
+            outColor = texture(background_image, v_texCoord);
+        }"##,
+    )?;
+    let program = link_program(&context, &vert_shader, &frag_shader)?;
+    context.use_program(Some(&program));
+    let vertices: [f32; 12] = [-1.0, -1.0,
+                               1.0, -1.0,
+                               -1.0, 1.0,
+                               1.0, -1.0,
+                               1.0, 1.0,
+                               -1.0, 1.0];
+    let texture_coords: [f32; 12] = [0.0, 0.0, 
+                                     1.0, 0.0,
+                                     0.0, 1.0,
+                                     1.0, 0.0,
+                                     1.0, 1.0,
+                                     0.0, 1.0];
+    let position_attribute_location = context.get_attrib_location(&program, "position");
+    let buffer = context.create_buffer().ok_or("Failed to create buffer")?;
+    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
+
+    // Note that `Float32Array::view` is somewhat dangerous (hence the
+    // `unsafe`!). This is creating a raw view into our module's
+    // `WebAssembly.Memory` buffer, but if we allocate more pages for ourself
+    // (aka do a memory allocation in Rust) it'll cause the buffer to change,
+    // causing the `Float32Array` to be invalid.
+    //
+    // As a result, after `Float32Array::view` we have to be very careful not to
+    // do any memory allocations before it's dropped.
+    unsafe {
+        let positions_array_buf_view = js_sys::Float32Array::view(&vertices);
+
+        context.buffer_data_with_array_buffer_view(
+            WebGl2RenderingContext::ARRAY_BUFFER,
+            &positions_array_buf_view,
+            WebGl2RenderingContext::STATIC_DRAW,
+        );
+    }
+
+    let vao = context
+        .create_vertex_array()
+        .ok_or("Could not create vertex array object")?;
+    context.bind_vertex_array(Some(&vao));
+
+    context.vertex_attrib_pointer_with_i32(
+        position_attribute_location as u32,
+        2,
+        WebGl2RenderingContext::FLOAT,
+        false,
+        0,
+        0,
+    );
+    context.enable_vertex_attrib_array(position_attribute_location as u32);
+
+    let buffer = context.create_buffer().ok_or("Failed to create buffer")?;
+    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
+
+    // Note that `Float32Array::view` is somewhat dangerous (hence the
+    // `unsafe`!). This is creating a raw view into our module's
+    // `WebAssembly.Memory` buffer, but if we allocate more pages for ourself
+    // (aka do a memory allocation in Rust) it'll cause the buffer to change,
+    // causing the `Float32Array` to be invalid.
+    //
+    // As a result, after `Float32Array::view` we have to be very careful not to
+    // do any memory allocations before it's dropped.
+    unsafe {
+        let tex_coord_array_buf_view = js_sys::Float32Array::view(&texture_coords);
+
+        context.buffer_data_with_array_buffer_view(
+            WebGl2RenderingContext::ARRAY_BUFFER,
+            &tex_coord_array_buf_view,
+            WebGl2RenderingContext::STATIC_DRAW,
+        );
+    }
+
+    let tex_coord_attribute_location = context.get_attrib_location(&program, "a_texCoord");
+    context.vertex_attrib_pointer_with_i32(
+        tex_coord_attribute_location as u32,
+        2,
+        WebGl2RenderingContext::FLOAT,
+        false,
+        0,
+        0,
+    );
+    context.enable_vertex_attrib_array(tex_coord_attribute_location as u32);
+    let leaf_texture_index = context.get_uniform_location(&program, "background_image");
+    context.uniform1i(leaf_texture_index.as_ref(), 1);
     Ok((program, vao))
-} 
+}

@@ -100,7 +100,14 @@
                                                     json_leaf.y_circle,
                                                     json_leaf.radius,
                                                     json_leaf.theta_max,
-                                                    json_leaf.theta_min);
+                                                    json_leaf.theta_min,
+                                                    json_monkey.width,
+                                                    json_monkey.height,
+                                                    json_monkey.frame_width,
+                                                    json_monkey.frame_height,
+                                                    json_monkey.n_frames,
+                                                    json_monkey.time_loop,
+                                                    json_monkey.advance_loop);
             let left = document.getElementById("left");
             let right = document.getElementById("right");
             function onUpLeft(e) {
@@ -132,6 +139,28 @@
               gamestate.undo_grow_tree();
             }
             document.getElementById("undoButton").onclick = onUndo;
+
+            let canvas = document.getElementById("canvas");
+            function onCanvasClick(e) {
+              var rect = canvas.getBoundingClientRect();
+    		      x = e.clientX - rect.left;
+              gamestate.onclick(x);
+            }
+            canvas.onclick = onCanvasClick;
+
+            let prev;
+            let next;
+            function step(timestamp) {
+              if (prev === undefined) {
+                prev = timestamp;
+              }
+              next = timestamp;
+              const elapsed = next - prev;
+              gamestate.on_animation_frame(elapsed / 1000);
+              prev = timestamp;
+              requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
           }
         }
       }
