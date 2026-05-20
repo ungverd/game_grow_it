@@ -219,6 +219,7 @@ impl GameState {
              background_vao) = gl_related::prepare_to_draw_background(&self.context)?;
         self.background_program = Some(background_program);
         self.background_vao = Some(background_vao);
+        self.draw_tree()?;
         Ok(())
     }
 
@@ -279,7 +280,7 @@ impl GameState {
     fn draw_monkey(&self) -> Result<(), JsValue> {
         self.context.use_program(self.background_program.as_ref());
         self.context.bind_vertex_array(self.background_vao.as_ref());
-        gl_related::draw(&self.context, 6, false, 0);
+        gl_related::draw(&self.context, 6, true, 0);
         self.context.use_program(self.monkey_running_program.as_ref());
         self.context.bind_vertex_array(self.monkey_vao.as_ref());
         gl_related::draw(&self.context, 6, false, 0);

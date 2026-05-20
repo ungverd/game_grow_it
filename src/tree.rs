@@ -1013,6 +1013,8 @@ impl crate::GameState {
             void main() {{
                 float a = - MIN_A_DIF * 2.0;
                 vec2 pos = gl_FragCoord.xy / vec2(canvas_w / CANVAS_REF_WIDTH, canvas_w / CANVAS_REF_WIDTH);
+
+                outColor = vec4(0.85, 0.9, 0.8, 1.0);
                 
                 for (uint i=0u; i < rectCount; i++) {{
                     if (pos.x < position_size[i].x ||

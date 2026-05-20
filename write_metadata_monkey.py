@@ -14,7 +14,7 @@ d = {"fname": fname,
      "frame_height": frame_height,
      "n_frames": 120,
      "time_loop": 0.5,
-     "advance_loop": frame_width * 1.4,
+     "advance_loop": 1.4,
      }
 json_data = json.dumps(d)
 new_fname = fname[:-3] + "json"

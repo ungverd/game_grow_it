@@ -104,7 +104,7 @@ impl Monkey {
     }
 
     pub fn on_animation_frame(&mut self, deltat: f32) {
-        crate::log(&format!("deltat {:?}", deltat));
+        //crate::log(&format!("deltat {:?}", deltat));
         if self.is_running {
             self.calculate_new_x(deltat);
         }

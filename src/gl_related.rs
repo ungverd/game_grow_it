@@ -392,7 +392,7 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     context.use_program(Some(&program));
     
     let position_attribute_location = context.get_attrib_location(&program, "position");
-    crate::log(&format!("position_attribute_location {:?}", position_attribute_location));
+    //crate::log(&format!("position_attribute_location {:?}", position_attribute_location));
     let positions_buffer = context.create_buffer().ok_or("Failed to create buffer")?;
     context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&positions_buffer));
 
@@ -439,7 +439,7 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
                                      1.0, 1.0,
                                      0.0, 1.0];  */                          
     let tex_coord_attribute_location = context.get_attrib_location(&program, "a_texCoord");
-    crate::log(&format!("tex_coord {:?}", tex_coord_attribute_location));
+    //crate::log(&format!("tex_coord {:?}", tex_coord_attribute_location));
     let tex_coord_buffer = context.create_buffer().ok_or("Failed to create buffer")?;
     context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&tex_coord_buffer));
 
