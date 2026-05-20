@@ -301,4 +301,43 @@ impl GameState {
         self.draw_monkey()?;
         Ok(())
     }
+
+    fn makeJoinedTree(&self) {
+        let mut joined_tree: Vec<TreeUnit> = vec![];
+        if !self.tree.is_empty() {
+            for unit in &self.tree {
+                let last = joined_tree.last_mut();
+                match last {
+                    Some(last) => {
+                        if last.left * unit.right == last.right * unit.left {
+                            last.left += unit.left * unit.repeats;
+                            last.right += unit.right * unit.repeats
+                        } else {
+                            joined_tree.push(TreeUnit{left: unit.left * unit.repeats,
+                                                        right: unit.right * unit.repeats,
+                                                        repeats: 1,});
+                        }
+                    }
+                    None => { joined_tree.push(TreeUnit{left: unit.left * unit.repeats,
+                                                        right: unit.right * unit.repeats,
+                                                        repeats: 1,}); }
+                }
+            }
+        }
+    }
 }
+
+struct TreeElForClimbingNotLinear {
+    center_x: f32,
+    center_y: f32,
+    angle_stop: f32,
+}
+
+struct TreeElForClimbing {
+    angle_start: f32,
+    length: f32,
+    start_x: f32,
+    start_y: f32,
+    is_linear: bool,
+    for_not_linear: Option<TreeElForClimbingNotLinear>,
+}  
