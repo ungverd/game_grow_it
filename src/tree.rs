@@ -747,7 +747,6 @@ impl crate::GameState {
             const float trunk_h = {:?};
             const float SEMI_W = {:?};
             const float MIN_A_DIF = SEMI_W * PI;
-            const float CANVAS_REF_WIDTH = {:?};
             const float x_circle = {:?};
             const float y_circle = {:?};
             const float radius_circle = {:?};
@@ -780,8 +779,8 @@ impl crate::GameState {
                 vec4 radius1_dif1_radius2_dif2[MAX_RECTS];
             }};
 
+            in vec2 screen_coord;
             uniform uint rectCount;
-            uniform float canvas_w;
             uniform sampler2D u_image;
             
             out vec4 outColor;
@@ -1012,7 +1011,7 @@ impl crate::GameState {
 
             void main() {{
                 float a = - MIN_A_DIF * 2.0;
-                vec2 pos = gl_FragCoord.xy / vec2(canvas_w / CANVAS_REF_WIDTH, canvas_w / CANVAS_REF_WIDTH);
+                vec2 pos = screen_coord;
 
                 outColor = vec4(0.85, 0.9, 0.8, 1.0);
                 
@@ -1188,7 +1187,6 @@ impl crate::GameState {
                 trunk_w,
                 trunk_h,
                 SEMI_W,
-                crate::CANVAS_REF_WIDTH,
                 x_circle,
                 y_circle,
                 radius,

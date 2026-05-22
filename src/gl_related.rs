@@ -30,10 +30,13 @@ pub fn prepare_gl(img: web_sys::HtmlImageElement,
         r##"#version 300 es
  
         in vec4 position;
+        in vec2 a_texCoord;
+        out vec2 screen_coord;
 
         void main() {
         
             gl_Position = position;
+            screen_coord = a_texCoord;
         }
         "##,
     )?;
@@ -89,6 +92,44 @@ pub fn prepare_gl(img: web_sys::HtmlImageElement,
         0,
     );
     context.enable_vertex_attrib_array(position_attribute_location as u32);
+
+    let texture_coords: [f32; 12] = [0.0, 0.0, 
+                                     crate::CANVAS_REF_WIDTH, 0.0,
+                                     0.0, crate::CANVAS_REF_WIDTH,
+                                     crate::CANVAS_REF_WIDTH, 0.0,
+                                     crate::CANVAS_REF_WIDTH, crate::CANVAS_REF_WIDTH,
+                                     0.0, crate::CANVAS_REF_WIDTH];                     
+    let tex_coord_attribute_location = context.get_attrib_location(&program, "a_texCoord");
+    //crate::log(&format!("tex_coord {:?}", tex_coord_attribute_location));
+    let tex_coord_buffer = context.create_buffer().ok_or("Failed to create buffer")?;
+    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&tex_coord_buffer));
+
+    // Note that `Float32Array::view` is somewhat dangerous (hence the
+    // `unsafe`!). This is creating a raw view into our module's
+    // `WebAssembly.Memory` buffer, but if we allocate more pages for ourself
+    // (aka do a memory allocation in Rust) it'll cause the buffer to change,
+    // causing the `Float32Array` to be invalid.
+    //
+    // As a result, after `Float32Array::view` we have to be very careful not to
+    // do any memory allocations before it's dropped.
+    unsafe {
+        let texture_coords_array_buf_view = js_sys::Float32Array::view(&texture_coords);
+
+        context.buffer_data_with_array_buffer_view(
+            WebGl2RenderingContext::ARRAY_BUFFER,
+            &texture_coords_array_buf_view,
+            WebGl2RenderingContext::DYNAMIC_DRAW,
+        );
+    }
+    context.enable_vertex_attrib_array(tex_coord_attribute_location as u32);
+    context.vertex_attrib_pointer_with_i32(
+        tex_coord_attribute_location as u32,
+        2,
+        WebGl2RenderingContext::FLOAT,
+        false,
+        0,
+        0,
+    );
 
     let texture = context.create_texture().expect("Cannot create gl texture");
     let level = 0;
@@ -429,8 +470,6 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
         0,
     );
     context.enable_vertex_attrib_array(position_attribute_location as u32);
-
-    context.bind_vertex_array(Some(&vao));
 
     /*let texture_coords: [f32; 12] = [0.0, 0.0, 
                                      1.0, 0.0,
