@@ -1,8 +1,10 @@
 use wasm_bindgen::prelude::*;
 use web_sys::{WebGl2RenderingContext, WebGlBuffer, WebGlFramebuffer, WebGlProgram, WebGlUniformLocation, WebGlVertexArrayObject};
+
+use crate::monkey_running::MonkeyRunning;
 mod tree;
 mod gl_related;
-mod monkey;
+mod monkey_running;
 mod monkey_climbing;
 
 pub const MAX_RECTS: usize = 1024;
@@ -16,6 +18,10 @@ pub const UBOS_NAMES: [&'static str; 7] = ["Position_size",
                                        "Smoothstepcenter_xy_12",
                                        "Angle1_dif1_angle2_dif2",
                                        "Radius1_dif1_radius2_dif2"];
+pub const DEST_REF: i32 = 26; // width of tree in pixels
+
+pub const START_X: i32 = 300;
+pub const START_Y: i32 = 1; // coordinates where three starts
 
 #[wasm_bindgen]
 extern "C" {
@@ -58,10 +64,21 @@ struct TreeState {
     left: u32,
 }
 
+enum MonkeyState {
+    running,
+    climbing,
+}
+
+struct Monkey {
+    monkey_state: MonkeyState,
+    running: monkey_running::MonkeyRunning,
+    climbing: monkey_climbing::MonkeyClimbing,
+}
+
 #[wasm_bindgen]
 pub struct GameState {
     tree: Vec<TreeUnit>,
-    monkey: monkey::Monkey,
+    monkey: Monkey,
     drawing_params: tree::DrawingParams,
     context: WebGl2RenderingContext,
     ubos_arr: [[f32; BUF_LENGTH]; NUM_UNIFORM_ARRAYS],
@@ -83,7 +100,13 @@ pub struct GameState {
 impl GameState {
     pub fn new() -> Result<GameState, JsValue> {
         let tree: Vec<TreeUnit> = vec![]; 
-        let monkey = monkey::Monkey::new();
+        let monkey_now = monkey_running::MonkeyRunning::new();
+        let climbing = monkey_climbing::MonkeyClimbing::new();
+        let monkey = Monkey{
+            monkey_state: MonkeyState::running,
+            running: monkey_now,
+            climbing,
+        };
         let drawing_params = tree::DrawingParams{scaling: 0.0,
                                                                 trunk_w: 0.0,
                                                                 trunk_h: 0.0,
@@ -182,7 +205,13 @@ impl GameState {
                                          n_frames: i32,
                                          time_loop: f32,
                                          advance_loop: f32,) -> Result<(), JsValue> {
-        self.monkey.populate_parameters(width, height, frame_width, frame_height, n_frames, time_loop, advance_loop);
+        self.monkey.running.populate_parameters(width,
+                                                         height,
+                                                         frame_width,
+                                                         frame_height,
+                                                         n_frames,
+                                                         time_loop,
+                                                         advance_loop);
         let shader_str = self.generate_shader_and_populate_values(width_ratio,
                                                                           height_ratio,
                                                                           trunk_ratio,
@@ -210,8 +239,8 @@ impl GameState {
             monkey_position_buffer,
             monkey_tex_coords_buffer) = gl_related::prepare_monkey(img_monkey,
                                                                              &self.context,
-                                                                             &self.monkey.vertex_arr,
-                                                                             &self.monkey.texture_arr)?;
+                                                                             &self.monkey.running.vertex_arr,
+                                                                             &self.monkey.running.texture_arr)?;
         self.monkey_running_program = Some(monkey_running_program);
         self.monkey_vao = Some(monkey_vao);
         self.monkey_position_buffer = Some(monkey_position_buffer);
@@ -289,14 +318,14 @@ impl GameState {
     }
 
     pub fn onclick(&mut self, x_click: f32) {
-        self.monkey.onclick(x_click);
+        self.monkey.running.onclick(x_click);
     }
 
     pub fn on_animation_frame(&mut self, deltat: f32) -> Result<(), JsValue> {
-        self.monkey.on_animation_frame(deltat);
+        self.monkey.running.on_animation_frame(deltat);
         gl_related::apply_arrays_monkey(&self.context,
-            &self.monkey.vertex_arr,
-            &self.monkey.texture_arr,
+            &self.monkey.running.vertex_arr,
+            &self.monkey.running.texture_arr,
             self.monkey_position_buffer.as_ref(),
             self.monkey_tex_coord_buffer.as_ref());
         self.draw_monkey()?;

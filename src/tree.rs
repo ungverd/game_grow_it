@@ -1,9 +1,8 @@
 use wasm_bindgen::prelude::*;
-const DEST_REF: i32 = 20;
 const LINE_WIDTH: f64 = 2.0;
 const SHADOW_WIDTH: f64 = 2.5;
 const SHADOW_STRENGTH: f64 = 0.2;
-const F_DEST_REF: f64 = DEST_REF as f64;
+const F_DEST_REF: f64 = crate::DEST_REF as f64;
 const PI: f64 = std::f64::consts::PI;
 //const STEM: [[u32; 3]; 6] = [[5,5,1], [2,1,12], [1,11,1], [5,5,5], [11,12,10], [5, 3, 2]]; // [right, left, repeats]
 //const STEM: [[u32; 3]; 8] = [[5,5,1], [2,1,12], [1,11,1], [3,3,2], [5,6,3], [5, 3, 2], [1, 0, 5], [0, 1, 4]];
@@ -15,8 +14,6 @@ const PI: f64 = std::f64::consts::PI;
 //const STEM: [[u32; 3]; 1] = [[1,0,1]]; // [right, left, repeats]
 const SIZE_X: usize = 600; // Needs to be changed according to canvas proportions
 const SIZE_Y: usize = 600; // Needs to be changed according to canvas proportions
-const START_X: i32 = 300;
-const START_Y: i32 = 1;
 const LEFT_BOOL: bool = true;
 const RIGHT_BOOL: bool = false;
 const SEMI_W: f64 = F_DEST_REF / 2f64;
@@ -131,8 +128,8 @@ fn get_segments(w: f64, stem: &Vec<crate::TreeUnit>) -> Vec<Segment> {
         segments_capacity += item.left * item.repeats;
     }
     let mut segments = Vec::with_capacity(segments_capacity as usize);
-    let mut center_bottom_x_global = START_X as f64;
-    let mut center_bottom_y_global = START_Y as f64;
+    let mut center_bottom_x_global = crate::START_X as f64;
+    let mut center_bottom_y_global = crate::START_Y as f64;
     let mut angle = 0f64;
     let mut total_distance_from_root = 0f64;
     for item in stem {

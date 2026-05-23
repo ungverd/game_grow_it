@@ -2,7 +2,7 @@ const MONKEY_START_X: f32 = 200.0;
 const MONKEY_START_Y: f32 = 1.0;
 const MONKEY_SCALING: f32 = 0.7; // 0.5 - monkey will be drawn smaller
 
-pub struct Monkey {
+pub struct MonkeyRunning {
     x_pos: f32,
     y_pos: f32,
     is_running: bool,
@@ -31,7 +31,7 @@ struct MonkeyRunningDrawParameters {
     v: f32,
 }
 
-impl Monkey {
+impl MonkeyRunning {
     pub fn new() -> Monkey {
         let parameters = MonkeyRunningDrawParameters {
             monkey_width: 0.0,
@@ -49,7 +49,7 @@ impl Monkey {
             number_vertical: 0,
             v: 0.0,
         };
-        Monkey {
+        MonkeyRunning {
             x_pos: MONKEY_START_X,
             y_pos: MONKEY_START_Y,
             is_running: false,
