@@ -32,7 +32,7 @@ struct MonkeyRunningDrawParameters {
 }
 
 impl MonkeyRunning {
-    pub fn new() -> Monkey {
+    pub fn new() -> MonkeyRunning {
         let parameters = MonkeyRunningDrawParameters {
             monkey_width: 0.0,
             monkey_height: 0.0,
@@ -173,5 +173,13 @@ impl MonkeyRunning {
                            x_coord_right, y_coord_bottom,
                            x_coord_right, y_coord_top,
                            x_coord_left,  y_coord_top,];
+    }
+
+    pub fn set_on_pos(&mut self, x: f32, y: f32) {
+        self.x_pos = x;
+        self.y_pos = y;
+        self.is_running = false;
+        self.desired_x = x;
+        self.start_x = x;
     }
 }
