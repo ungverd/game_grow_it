@@ -33,10 +33,11 @@ struct TreeElForClimbing {
     start_y: f32,
     end_x: f32,
     end_y: f32,
-    is_straight: bool,
     right: u32,
     left: u32,
     for_not_linear: Option<TreeElForClimbingNotLinear>,
+    arm_dist: f32,
+    leg_dist: f32,
 }
 
 struct TreeUnitReduced {
@@ -73,15 +74,16 @@ fn make_tree_for_climbing_unit(reduced_unit: &TreeUnitReduced,
                                start_x: f32,
                                start_y: f32,
                                angle_start: f32,
-                               dist_from_root_start: f32,) -> (TreeElForClimbing, f32, f32, f32, f32) {
+                               dist_from_root_start: f32,
+                               straight_up_dist: f32,
+                               straight_down_dist: f32) -> (TreeElForClimbing, f32, f32, f32, f32) {
     let for_not_linear;
-    let is_straight;
     let length;
     let end_x;
     let end_y;
     let angle_stop;
+    let 
     if reduced_unit.right != reduced_unit.left {
-        is_straight = false;
         let dif_right_left = (reduced_unit.right - reduced_unit.left) as f32;
         let sum_right_left = (reduced_unit.right - reduced_unit.left) as f32;
         let delta_angle = dif_right_left * PI / 6.0;
@@ -99,7 +101,6 @@ fn make_tree_for_climbing_unit(reduced_unit: &TreeUnitReduced,
                                                     angle_stop,
         });
     } else {
-        is_straight = true;
         for_not_linear = None;
         length = W * PI / 6.0 * (reduced_unit.right as f32);
         end_x = start_x - length * angle_start.sin();
@@ -114,7 +115,6 @@ fn make_tree_for_climbing_unit(reduced_unit: &TreeUnitReduced,
         start_y,
         end_x,
         end_y,
-        is_straight,
         right: reduced_unit.right,
         left: reduced_unit.left,
         for_not_linear,
@@ -289,17 +289,17 @@ fn get_circle_circle_intersection(r1: f32, r2: f32, deltax: f32) -> (f32, f32) {
     (x_intersect, y)
 }
 
-fn get_straight_extended_length() -> f32 {
+fn get_straight_extended_length() -> (f32, f32) {
     let r_arm_extended = ARM_SEGMENT_LENGTH * LEG_EXTENSION_COEFFICIENT;
     let r_leg_extended = LEG_SEGMENT_LENGTH * LEG_EXTENSION_COEFFICIENT;
     let deltax_arm = W / 2.0 - DELTAX_FRONT;
     let deltax_leg = W / 2.0 - DELTAX_BACK;
     let deltay_arm = get_circle_vertical_intersection(r_arm_extended, deltax_arm); 
     let deltay_leg = get_circle_vertical_intersection(r_leg_extended, deltax_leg);
-    deltay_arm + DELTAY_FRONT + DELTAY_BACK + deltay_leg
+    (deltay_arm + DELTAY_FRONT, DELTAY_BACK + deltay_leg)
 }
 
-fn get_circ_extended_length(r: f32) -> f32 {
+fn get_circ_extended_length(r: f32) -> (f32, f32) {
     let r_arm_extended = ARM_SEGMENT_LENGTH * LEG_EXTENSION_COEFFICIENT;
     let r_leg_extended = LEG_SEGMENT_LENGTH * LEG_EXTENSION_COEFFICIENT;
     let r_center = r.abs();
@@ -316,12 +316,20 @@ fn get_circ_extended_length(r: f32) -> f32 {
         r_leg_extended,
         deltax_leg);
     let angle_intersection_leg = y_intersection_leg.atan2(x_intersection_leg);
-    let angle_body = (DELTAY_FRONT + DELTAY_BACK) / r_center;
-    let total_angle = angle_intersection_arm + angle_body + angle_intersection_leg;
+    let angle_body_up = DELTAY_FRONT / r_center;
+    let angle_body_down = DELTAY_BACK / r_center;
+    let angle_up = angle_intersection_arm + angle_body_up;
+    let angle_down = angle_body_down + angle_intersection_leg;
+    let total_angle = angle_up + angle_down;
     let max_angle = PI * 2.0 / 3.0;
-    let converted_angle = if total_angle < max_angle {total_angle} else {max_angle};
-    let converted_length = converted_angle * r_center;
-    converted_length
+    let (converted_angle_up, converted_angle_down) = if total_angle < max_angle {
+        (angle_up, angle_down)
+    } else {
+        (max_angle * angle_up / total_angle, max_angle * angle_down / total_angle)
+    };
+    let converted_length_up = converted_angle_up * r_center;
+    let converted_length_down = converted_angle_down * r_center;
+    (converted_length_up, converted_length_down)
 }
 
 struct LegEndPos {
@@ -331,7 +339,7 @@ struct LegEndPos {
 }
 
 fn generate_leg_arrays(tree: &Vec<TreeElForClimbing>) {
-    let length_straight = get_straight_extended_length();
+    let (length_straight_up, length_straight_down) = get_straight_extended_length();
     let mut left_leg_vec: Vec<LegEndPos> = vec![]; 
     let mut right_leg_vec: Vec<LegEndPos> = vec![]; 
     let mut left_arm_vec: Vec<LegEndPos> = vec![]; 
@@ -341,6 +349,12 @@ fn generate_leg_arrays(tree: &Vec<TreeElForClimbing>) {
             left_leg_vec.push(LegEndPos{leg_pos: 0.0, center_pos: MIN_DIST_FROM_ROOT});
             right_leg_vec.push(LegEndPos{leg_pos: 0.0, center_pos: MIN_DIST_FROM_ROOT});
         }
-    
+        let now_segment = tree.get(i).unwrap();
+        let (length_up, length_down) = match &now_segment.for_not_linear {
+            None => {(length_straight_up, length_straight_down)}
+            Some(el) => {
+                get_circ_extended_length(el.radius)
+            }
+        };
     }
 }
