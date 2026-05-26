@@ -78,6 +78,7 @@ struct Monkey {
 #[wasm_bindgen]
 pub struct GameState {
     tree: Vec<TreeUnit>,
+    tree_for_climbing: Vec<monkey_climbing::TreeElForClimbing>,
     monkey: Monkey,
     drawing_params: tree::DrawingParams,
     context: WebGl2RenderingContext,
@@ -94,6 +95,8 @@ pub struct GameState {
     background_framebuffer: Option<WebGlFramebuffer>,
     background_program: Option<WebGlProgram>,
     background_vao: Option<WebGlVertexArrayObject>,
+    straight_up_dist: f32,
+    straight_down_dist: f32,
 }
 
 #[wasm_bindgen]
@@ -107,6 +110,7 @@ impl GameState {
             running: monkey_now,
             climbing,
         };
+        let (straight_up_dist, straight_down_dist) = get_straight_extended_length();
         let drawing_params = tree::DrawingParams{scaling: 0.0,
                                                                 trunk_w: 0.0,
                                                                 trunk_h: 0.0,
@@ -138,8 +142,10 @@ impl GameState {
             right: 0,
             left: 0,
         };
+        let tree_for_climbing: Vec<monkey_climbing::TreeElForClimbing> = vec![];
         Ok(GameState {
             tree,
+            tree_for_climbing,
             monkey,
             drawing_params,
             context,
@@ -156,6 +162,8 @@ impl GameState {
             background_framebuffer: None,
             background_program: None,
             background_vao: None,
+            straight_up_dist,
+            straight_down_dist,
         })
     }
 
@@ -257,6 +265,14 @@ impl GameState {
         self.tree.push(TreeUnit{left, right, repeats: 1})
     }
 
+    fn update_tree_for_climbing(&mut self) {
+        self.tree_for_climbing = monkey_climbing::make_tree_for_climbing(&self.tree,
+            START_X as f32,
+            START_Y as f32,
+            self.straight_up_dist,
+            self.straight_down_dist);
+    }
+
     #[wasm_bindgen]
     pub fn grow_tree(&mut self) -> Result<(), JsValue> {
         let left = self.tree_state.left;
@@ -272,6 +288,7 @@ impl GameState {
             }
             None => { self.create_new_tree_unit(left, right); }
         }
+        self.update_tree_for_climbing();
         self.draw_tree()?;
         Ok(())
     }
@@ -289,6 +306,7 @@ impl GameState {
             }
             None => {}
         }
+        self.update_tree_for_climbing();
         self.draw_tree()?;
         Ok(())
     }
@@ -331,4 +349,19 @@ impl GameState {
         self.draw_monkey()?;
         Ok(())
     }
+}
+
+fn get_circle_vertical_intersection(r: f32, x: f32) -> f32 {
+    // center of coordinates at circle's center, vertical straight line 
+    (r*r - x*x).sqrt()
+}
+
+fn get_straight_extended_length() -> (f32, f32) {
+    let r_arm_extended = monkey_climbing::ARM_SEGMENT_LENGTH * monkey_climbing::LEG_EXTENSION_COEFFICIENT;
+    let r_leg_extended = monkey_climbing::LEG_SEGMENT_LENGTH * monkey_climbing::LEG_EXTENSION_COEFFICIENT;
+    let deltax_arm = monkey_climbing::W / 2.0 - monkey_climbing::DELTAX_FRONT;
+    let deltax_leg = monkey_climbing::W / 2.0 - monkey_climbing::DELTAX_BACK;
+    let deltay_arm = get_circle_vertical_intersection(r_arm_extended, deltax_arm); 
+    let deltay_leg = get_circle_vertical_intersection(r_leg_extended, deltax_leg);
+    (deltay_arm + monkey_climbing::DELTAY_FRONT, monkey_climbing::DELTAY_BACK + deltay_leg)
 }

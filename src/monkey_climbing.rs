@@ -1,14 +1,14 @@
-const DELTAX_FRONT: f32 = 3.0; //px
-const DELTAX_BACK: f32 = 3.0; //px
-const DELTAY_FRONT: f32 = 11.0; //px
-const DELTAY_BACK: f32 = 11.0; //px
-const LEG_SEGMENT_LENGTH: f32 = 10.0; //px
-const ARM_SEGMENT_LENGTH: f32 = 9.0; //px
+pub const DELTAX_FRONT: f32 = 3.0; //px
+pub const DELTAX_BACK: f32 = 3.0; //px
+pub const DELTAY_FRONT: f32 = 11.0; //px
+pub const DELTAY_BACK: f32 = 11.0; //px
+pub const LEG_SEGMENT_LENGTH: f32 = 10.0; //px
+pub const ARM_SEGMENT_LENGTH: f32 = 9.0; //px
 const MIN_DIST_FROM_ROOT: f32 = 5.0; //px, must be less then W * PI / 6 / 2
 const PI: f32 = std::f32::consts::PI;
-const W: f32 = crate::DEST_REF as f32; // three width in px
+pub const W: f32 = crate::DEST_REF as f32; // three width in px
 const CLIMBING_SPEED: f32 = 50.0; // px/s
-const LEG_EXTENSION_COEFFICIENT: f32 = 1.9; // must be lightly under 2, bigger -> leg more straight
+pub const LEG_EXTENSION_COEFFICIENT: f32 = 1.9; // must be lightly under 2, bigger -> leg more straight
 const STEP_RATIO: f32 = 2.0; // max distance between arm and leg is 2 times larger than min distance
 
 pub struct MonkeyClimbing {
@@ -25,7 +25,7 @@ struct TreeElForClimbingNotLinear {
     angle_stop: f32,
 }
 
-struct TreeElForClimbing {
+pub struct TreeElForClimbing {
     angle_start: f32,
     dist_from_root_start: f32,
     length: f32,
@@ -38,6 +38,8 @@ struct TreeElForClimbing {
     for_not_linear: Option<TreeElForClimbingNotLinear>,
     arm_dist: f32,
     leg_dist: f32,
+    arm_k: f32, // arm_dist / arm_k is shortest arm distance from center
+    leg_k: f32,
 }
 
 struct TreeUnitReduced {
@@ -82,7 +84,7 @@ fn make_tree_for_climbing_unit(reduced_unit: &TreeUnitReduced,
     let end_x;
     let end_y;
     let angle_stop;
-    let 
+    let (arm_dist, leg_dist);
     if reduced_unit.right != reduced_unit.left {
         let dif_right_left = (reduced_unit.right - reduced_unit.left) as f32;
         let sum_right_left = (reduced_unit.right - reduced_unit.left) as f32;
@@ -94,6 +96,7 @@ fn make_tree_for_climbing_unit(reduced_unit: &TreeUnitReduced,
         angle_stop = angle_start + delta_angle;
         end_x = center_x + radius * angle_stop.cos();
         end_y = center_y + radius * angle_stop.sin();
+        (arm_dist, leg_dist) = get_circ_extended_length(radius);
         for_not_linear = Some(TreeElForClimbingNotLinear {
                                                     center_x,
                                                     center_y,
@@ -106,7 +109,11 @@ fn make_tree_for_climbing_unit(reduced_unit: &TreeUnitReduced,
         end_x = start_x - length * angle_start.sin();
         end_y = start_y + length * angle_start.cos();
         angle_stop = angle_start;
+        arm_dist = straight_up_dist;
+        leg_dist = straight_down_dist;
     }
+    let arm_k = 2.0 * arm_dist * STEP_RATIO / (arm_dist + leg_dist + STEP_RATIO * (arm_dist - leg_dist));
+    let leg_k = 2.0 * leg_dist * STEP_RATIO / (arm_dist + leg_dist + STEP_RATIO * (leg_dist - arm_dist));
     (TreeElForClimbing {
         angle_start,
         dist_from_root_start,
@@ -118,12 +125,18 @@ fn make_tree_for_climbing_unit(reduced_unit: &TreeUnitReduced,
         right: reduced_unit.right,
         left: reduced_unit.left,
         for_not_linear,
+        arm_dist,
+        leg_dist,
+        arm_k,
+        leg_k,
     }, end_x, end_y, dist_from_root_start + length, angle_stop)
 }
 
-fn make_tree_for_climbing(tree: &Vec<crate::TreeUnit>,
+pub fn make_tree_for_climbing(tree: &Vec<crate::TreeUnit>,
                           start_x: f32,
-                          start_y: f32) -> Vec<TreeElForClimbing>{
+                          start_y: f32,
+                          straight_up_dist: f32,
+                          straight_down_dist: f32) -> Vec<TreeElForClimbing>{
     let joined_tree = make_joined_tree(tree);
     let mut tree_for_climbing: Vec<TreeElForClimbing> = vec![];
     let mut start_x = start_x;
@@ -135,7 +148,13 @@ fn make_tree_for_climbing(tree: &Vec<crate::TreeUnit>,
              start_x_new,
              start_y_new,
              dist_from_root_new,
-             angle_start_new) = make_tree_for_climbing_unit(reduced_unit, start_x, start_y, angle_start, dist_from_root_start);
+             angle_start_new) = make_tree_for_climbing_unit(reduced_unit,
+                start_x,
+                start_y,
+                angle_start,
+                dist_from_root_start,
+                straight_up_dist,
+                straight_down_dist);
         start_x = start_x_new;
         start_y = start_y_new;
         angle_start = angle_start_new;
@@ -276,27 +295,12 @@ impl crate::Monkey {
     } 
 }
 
-fn get_circle_vertical_intersection(r: f32, x: f32) -> f32 {
-    // center of coordinates at circle's center, vertical straight line 
-    (r*r - x*x).sqrt()
-}
-
 fn get_circle_circle_intersection(r1: f32, r2: f32, deltax: f32) -> (f32, f32) {
     // center of coordinates in center of big circle (r1),
     // center of r2 is deplaced at left on deltax
     let x_intersect = (r1*r1 - r2*r2 + deltax*deltax) / 2.0 / deltax;
     let y = (r1*r1 - x_intersect*x_intersect).sqrt();
     (x_intersect, y)
-}
-
-fn get_straight_extended_length() -> (f32, f32) {
-    let r_arm_extended = ARM_SEGMENT_LENGTH * LEG_EXTENSION_COEFFICIENT;
-    let r_leg_extended = LEG_SEGMENT_LENGTH * LEG_EXTENSION_COEFFICIENT;
-    let deltax_arm = W / 2.0 - DELTAX_FRONT;
-    let deltax_leg = W / 2.0 - DELTAX_BACK;
-    let deltay_arm = get_circle_vertical_intersection(r_arm_extended, deltax_arm); 
-    let deltay_leg = get_circle_vertical_intersection(r_leg_extended, deltax_leg);
-    (deltay_arm + DELTAY_FRONT, DELTAY_BACK + deltay_leg)
 }
 
 fn get_circ_extended_length(r: f32) -> (f32, f32) {
@@ -339,7 +343,6 @@ struct LegEndPos {
 }
 
 fn generate_leg_arrays(tree: &Vec<TreeElForClimbing>) {
-    let (length_straight_up, length_straight_down) = get_straight_extended_length();
     let mut left_leg_vec: Vec<LegEndPos> = vec![]; 
     let mut right_leg_vec: Vec<LegEndPos> = vec![]; 
     let mut left_arm_vec: Vec<LegEndPos> = vec![]; 
@@ -350,11 +353,5 @@ fn generate_leg_arrays(tree: &Vec<TreeElForClimbing>) {
             right_leg_vec.push(LegEndPos{leg_pos: 0.0, center_pos: MIN_DIST_FROM_ROOT});
         }
         let now_segment = tree.get(i).unwrap();
-        let (length_up, length_down) = match &now_segment.for_not_linear {
-            None => {(length_straight_up, length_straight_down)}
-            Some(el) => {
-                get_circ_extended_length(el.radius)
-            }
-        };
     }
 }
