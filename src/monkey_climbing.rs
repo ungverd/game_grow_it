@@ -1,3 +1,5 @@
+use crate::START_X;
+
 pub const DELTAX_FRONT: f32 = 3.0; //px
 pub const DELTAX_BACK: f32 = 3.0; //px
 pub const DELTAY_FRONT: f32 = 11.0; //px
@@ -38,8 +40,8 @@ pub struct TreeElForClimbing {
     for_not_linear: Option<TreeElForClimbingNotLinear>,
     arm_dist: f32,
     leg_dist: f32,
-    arm_k: f32, // arm_dist / arm_k is shortest arm distance from center
-    leg_k: f32,
+    step: f32, // each step, monkey's center does this dist, and moving limb does 2x this
+               // and it's also a difference between bended and extended arms (or legs)
 }
 
 struct TreeUnitReduced {
@@ -112,8 +114,7 @@ fn make_tree_for_climbing_unit(reduced_unit: &TreeUnitReduced,
         arm_dist = straight_up_dist;
         leg_dist = straight_down_dist;
     }
-    let arm_k = 2.0 * arm_dist * STEP_RATIO / (arm_dist + leg_dist + STEP_RATIO * (arm_dist - leg_dist));
-    let leg_k = 2.0 * leg_dist * STEP_RATIO / (arm_dist + leg_dist + STEP_RATIO * (leg_dist - arm_dist));
+    let step = (arm_dist + leg_dist) * (STEP_RATIO - 1.0) / 2.0 / STEP_RATIO;
     (TreeElForClimbing {
         angle_start,
         dist_from_root_start,
@@ -127,8 +128,7 @@ fn make_tree_for_climbing_unit(reduced_unit: &TreeUnitReduced,
         for_not_linear,
         arm_dist,
         leg_dist,
-        arm_k,
-        leg_k,
+        step,
     }, end_x, end_y, dist_from_root_start + length, angle_stop)
 }
 
@@ -337,9 +337,84 @@ fn get_circ_extended_length(r: f32) -> (f32, f32) {
 }
 
 struct LegEndPos {
-    leg_pos: f32,
+    leg_pos_x: f32,
+    leg_pos_y: f32,
     center_pos:f32, // if center is between center_pos1 and center_pos2,
-                    // leg_end will be interpolated between leg_pos1 and leg_pos2
+                    // leg_end will be interpolated between leg_pos1 and leg_pos2.
+                    // center_pos is distance from root
+}
+
+fn get_pos_x_y_segment_known(dist_from_root: f32,
+                             segment: &TreeElForClimbing,
+                             is_left: bool) -> (f32, f32) {
+    let dist_from_start_segment = dist_from_root - segment.dist_from_root_start;
+    let multiplier = if is_left {-1.0} else {1.0};
+    match &segment.for_not_linear {
+        None => {
+            let center_x = segment.start_x - dist_from_start_segment * segment.angle_start.sin();
+            let center_y = segment.start_y + dist_from_start_segment * segment.angle_start.cos();
+            let pos_x = center_x + W / 2.0 * multiplier * segment.angle_start.cos();
+            let pos_y = center_y + W / 2.0 * multiplier * segment.angle_start.sin();
+            (pos_x, pos_y)
+        }
+        Some(el) => {
+            let now_radius = el.radius + W / 2.0 * multiplier;
+            let now_angle = dist_from_start_segment / segment.length * (el.angle_stop - segment.angle_start);
+            let pos_x = el.center_x + now_radius * now_angle.cos();
+            let pos_y = el.center_y + now_radius * now_angle.sin();
+            (pos_x, pos_y)
+        }
+    }
+}
+
+fn get_pos_x_y(dist_from_root: f32,
+               tree: &Vec<TreeElForClimbing>,
+               current_segment: usize,
+               is_left: bool) -> (f32, f32) {
+    //let mut dist_from_root = dist_from_root;
+    let current_segment_obj = tree.get(current_segment).unwrap();
+    if dist_from_root >= current_segment_obj.dist_from_root_start {
+        let dist_end = current_segment_obj.dist_from_root_start + current_segment_obj.length;
+        if dist_from_root <= dist_end {
+            return get_pos_x_y_segment_known(dist_from_root,
+                             current_segment_obj,
+                                      is_left);
+        } else {
+            let last_segment = tree.last().unwrap();
+            let max_dist_from_root = last_segment.dist_from_root_start + last_segment.length;
+            if dist_from_root > max_dist_from_root {
+                return get_pos_x_y_segment_known(max_dist_from_root,
+                                    last_segment,
+                                    is_left);
+            } else {
+                for current_segment_i in current_segment+1..tree.len() {
+                    let current_segment_obj = tree.get(current_segment_i).unwrap();
+                    if dist_from_root >= current_segment_obj.dist_from_root_start {
+                        return get_pos_x_y_segment_known(dist_from_root,
+                                    current_segment_obj,
+                                    is_left);
+                    }
+                }
+            }
+        }
+    } else {
+        if dist_from_root <= 0.0 {
+            return get_pos_x_y_segment_known(0.0,
+                                    tree.first().unwrap(),
+                                    is_left)
+        } else {
+            for current_segment_i in (0..current_segment).rev() {
+                let current_segment_obj = tree.get(current_segment_i).unwrap();
+                let dist_end = current_segment_obj.dist_from_root_start + current_segment_obj.length;
+                if dist_from_root <= dist_end {
+                    return get_pos_x_y_segment_known(dist_from_root,
+                                current_segment_obj,
+                                is_left);
+                }
+            }
+        }
+    }
+    return (-1.0, -1.0); // must not get here
 }
 
 fn generate_leg_arrays(tree: &Vec<TreeElForClimbing>) {
@@ -349,8 +424,20 @@ fn generate_leg_arrays(tree: &Vec<TreeElForClimbing>) {
     let mut right_arm_vec: Vec<LegEndPos> = vec![]; 
     for i in 0..tree.len() {
         if i == 0 {
-            left_leg_vec.push(LegEndPos{leg_pos: 0.0, center_pos: MIN_DIST_FROM_ROOT});
-            right_leg_vec.push(LegEndPos{leg_pos: 0.0, center_pos: MIN_DIST_FROM_ROOT});
+            let (left_leg_pos_x, left_leg_pos_y) = get_pos_x_y(0.0,
+                                                                        tree,
+                                                                        0,
+                                                                        true);
+            left_leg_vec.push(LegEndPos{leg_pos_x: left_leg_pos_x,
+                                        leg_pos_y: left_leg_pos_y,
+                                        center_pos: MIN_DIST_FROM_ROOT});
+            let (right_leg_pos_x, right_leg_pos_y) = get_pos_x_y(0.0,
+                                                                        tree,
+                                                                        0,
+                                                                        false);
+            right_leg_vec.push(LegEndPos{leg_pos_x: right_leg_pos_x,
+                                        leg_pos_y: right_leg_pos_y,
+                                        center_pos: MIN_DIST_FROM_ROOT});
         }
         let now_segment = tree.get(i).unwrap();
     }
