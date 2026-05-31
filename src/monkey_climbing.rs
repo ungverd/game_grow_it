@@ -195,52 +195,37 @@ fn get_segment(dist_from_root: f32,
         return None;
     }
     let tree_len = tree.len();
-    let mut res_segment = tree.first().unwrap();
     let last  = tree.last().unwrap();
-    let mut found = false;
-    let mut now_segment;
-    while !found {
-        now_segment = tree.get(segment_num);
-        match(now_segment) {
+    loop {
+        let now_segment = tree.get(segment_num);
+        let segment_unwrapped;
+        match now_segment {
             None => {
-                found = true;
-                res_segment = last;
-                actual_dist_from_root = last.dist_from_root_start + last.length
+                segment_unwrapped = last;
+                segment_num = tree_len - 1;
             }
             Some(tree_el) => {
-                if dist_from_root >= tree_el.dist_from_root_start &&
-                dist_from_root <= tree_el.dist_from_root_start + tree_el.length {
-                    found = true;
-                    res_segment = tree_el;
-                    actual_dist_from_root = dist_from_root;
-                } else {
-                    if dist_from_root < tree_el.dist_from_root_start {
-                        if dist_from_root < MIN_DIST_FROM_ROOT {
-                            found = true;
-                            res_segment = tree.first().unwrap();
-                            actual_dist_from_root = MIN_DIST_FROM_ROOT;
-                        } else {
-                            segment_num -= 1;
-                        }
-                    } else {
-                        if segment_num >= tree.len() - 1 {
-                            found = true;
-                            segment_num = tree.len() - 1;
-                            res_segment = last;
-                            actual_dist_from_root = last.dist_from_root_start + last.length;
-                        } else {
-                        segment_num += 1;
-                        }
-                    }
-                }
+                segment_unwrapped = tree_el;
+            }
+        }
+        let start_dist = segment_unwrapped.dist_from_root_start;
+        let max_dist = start_dist + segment_unwrapped.length;
+        if dist_from_root >= start_dist &&
+           dist_from_root <= max_dist {
+            return Some(segment_num);
+        } else {
+            if dist_from_root < start_dist {
+                segment_num -= 1;
+            } else {
+               
+                segment_num += 1;
             }
         }
     }
-    Some(segment_num)
 }
 
 
-fn get_segment_x_y_dist_from_root(dist_from_root: f32,
+fn get_segment_x_y_dist_from_root_body(dist_from_root: f32,
                    tree: &Vec<TreeElForClimbing>,
                    segment_num: usize) -> (usize, f32, f32, f32) {
     let mut segment_num = segment_num;
@@ -248,50 +233,23 @@ fn get_segment_x_y_dist_from_root(dist_from_root: f32,
     if segment_num >= tree_len {
         segment_num = tree_len - 1;
     }
-    let mut res_segment = tree.first().unwrap();
+    let res_segment;
     let mut actual_dist_from_root = dist_from_root;
     if dist_from_root < MIN_DIST_FROM_ROOT {
         res_segment = tree.first().unwrap();
         actual_dist_from_root = MIN_DIST_FROM_ROOT;
+        segment_num = 0;
     } else {
-        let last  = tree.last().unwrap();
-        let mut found = false;
-        let mut now_segment;
-        while !found {
-            now_segment = tree.get(segment_num);
-            match(now_segment) {
-                None => {
-                    found = true;
-                    res_segment = last;
-                    actual_dist_from_root = last.dist_from_root_start + last.length
-                }
-                Some(tree_el) => {
-                    if dist_from_root >= tree_el.dist_from_root_start &&
-                    dist_from_root <= tree_el.dist_from_root_start + tree_el.length {
-                        found = true;
-                        res_segment = tree_el;
-                        actual_dist_from_root = dist_from_root;
-                    } else {
-                        if dist_from_root < tree_el.dist_from_root_start {
-                            if dist_from_root < MIN_DIST_FROM_ROOT {
-                                found = true;
-                                res_segment = tree.first().unwrap();
-                                actual_dist_from_root = MIN_DIST_FROM_ROOT;
-                            } else {
-                                segment_num -= 1;
-                            }
-                        } else {
-                            if segment_num >= tree.len() - 1 {
-                                found = true;
-                                segment_num = tree.len() - 1;
-                                res_segment = last;
-                                actual_dist_from_root = last.dist_from_root_start + last.length;
-                            } else {
-                            segment_num += 1;
-                            }
-                        }
-                    }
-                }
+        let segment_num_or_none = get_segment(actual_dist_from_root, tree, segment_num);
+        match segment_num_or_none {
+            None => { // current pos is higher than total tree length
+                res_segment = tree.last().unwrap();
+                actual_dist_from_root = res_segment.dist_from_root_start + res_segment.length;
+                segment_num = tree_len - 1;
+            }
+            Some(number) => {
+                segment_num = number;
+                res_segment = tree.get(number).unwrap();
             }
         }
     }
@@ -337,7 +295,7 @@ impl crate::Monkey {
                 let (new_seg_num,
                      new_x,
                      new_y,
-                     new_total_height) = get_segment_x_y_dist_from_root(self.climbing.total_height,
+                     new_total_height) = get_segment_x_y_dist_from_root_body(self.climbing.total_height,
                                                                              tree_for_climbing,
                                                                  self.climbing.now_segment);
                 self.climbing.body_x = new_x;
@@ -471,6 +429,160 @@ fn get_limb_pos_x_y(dist_from_root: f32,
     return (-1.0, -1.0); // must not get here
 }
 
+#[derive(Clone)]
+struct ArmLegCharact {
+    a: f32, // arm distance
+    l: f32, // leg distance
+    step: f32,
+}
+
+struct MonkeyClimbingNodePoint {
+    is_right_up: bool,
+    down_arm_leg: ArmLegCharact,
+    up_arm_leg: ArmLegCharact,
+    center_pos: f32,
+    down_leg_pos: f32,
+    up_leg_pos: f32,
+    down_arm_pos: f32,
+    up_arm_pos: f32,
+    is_final: bool,
+    center_segment_num: usize,
+}
+
+fn make_in_bounds(input: f32, lower: f32, upper: f32) -> f32 {
+    if input < lower {lower} else {if input > upper {upper} else {input}}
+}
+
+impl MonkeyClimbingNodePoint {
+    fn new(prev: &MonkeyClimbingNodePoint,
+           new_arm_leg_charact: ArmLegCharact,
+           tree: &Vec<TreeElForClimbing>) -> MonkeyClimbingNodePoint {
+        let is_right_up = !prev.is_right_up;
+        let known_arm_pos = prev.up_arm_pos;
+        let known_leg_pos = prev.up_leg_pos;
+        let step1 = prev.up_arm_leg.step;
+        let l1 = prev.up_arm_leg.l;
+        let a1 = prev.up_arm_leg.a;
+        let step2 = new_arm_leg_charact.step;
+        let a2 = new_arm_leg_charact.a;
+        let l2 = new_arm_leg_charact.l;
+        let new_arm_pos;
+        let new_leg_pos;
+        let new_center_pos;
+        if step2 < step1 {
+            new_arm_pos = known_arm_pos + step2;
+            new_leg_pos = known_arm_pos - (l2 + a2 - step2 * 2.0);
+            new_center_pos = known_leg_pos + l1;
+        } else {
+             new_leg_pos = known_arm_pos - (l1 + a1 - step1 * 2.0);
+             new_arm_pos = new_leg_pos + (l2 + a2 - step2);
+             new_center_pos = new_arm_pos - a2;
+        }
+        let last = tree.last().unwrap();
+        let max_pos = last.dist_from_root_start + last.length;
+        let is_final = new_center_pos >= max_pos; 
+        let center_pos = make_in_bounds(new_center_pos, 0.0, max_pos);
+        MonkeyClimbingNodePoint {
+            is_right_up,
+            down_arm_leg: prev.up_arm_leg.clone(),
+            up_arm_leg: new_arm_leg_charact,
+            center_pos,
+            down_leg_pos: make_in_bounds(known_leg_pos, 0.0, max_pos),
+            down_arm_pos: make_in_bounds(known_arm_pos, 0.0, max_pos),
+            up_leg_pos: make_in_bounds(new_leg_pos, 0.0, max_pos),
+            up_arm_pos: make_in_bounds(new_arm_pos, 0.0, max_pos),
+            is_final,
+            center_segment_num: get_segment(center_pos, tree, prev.center_segment_num).unwrap(),
+        }
+    }
+
+    fn get_min_max_underlying_steps(&self, tree: &Vec<TreeElForClimbing>) -> (f32, f32) {
+        let pos1 = self.down_leg_pos;
+        let segment1_num = get_segment(pos1, tree, self.center_segment_num).unwrap();
+        let pos2 = self.up_arm_pos;
+        let segment2_num = get_segment(pos2, tree, self.center_segment_num).unwrap();
+        let mut steps: Vec<f32> = vec![];
+        for el_step in  tree[segment1_num..=segment2_num].iter().map(|el| el.step) {
+            steps.push(el_step);
+        }
+        steps.sort_by(f32::total_cmp); //ascending order
+        (*steps.first().unwrap(), *steps.last().unwrap())
+    }
+
+    fn generate_first_el(tree: &Vec<TreeElForClimbing>) {
+        let is_right_up = true; // arbitrary choice
+        let center_pos = MIN_DIST_FROM_ROOT;
+        let (up_arm_pos, arm_segment_num) = get_first_right_arm_dist_and_segment(tree, center_pos);
+        let a = up_arm_pos - center_pos;
+        let l = MIN_DIST_FROM_ROOT * STEP_RATIO;
+        let step = (a + l + (a + l) / STEP_RATIO);
+        MonkeyClimbingNodePoint {
+            is_right_up,
+            down_arm_leg: ArmLegCharact,
+            up_arm_leg: ArmLegCharact,
+            center_pos,
+            down_leg_pos,
+            up_leg_pos,
+            down_arm_pos,
+            up_arm_pos,
+            is_final,
+            center_segment_num,
+         };
+
+    }
+}
+
+
+fn try_a(a: f32, dist: f32, tree: &Vec<TreeElForClimbing>,) -> bool {
+    for el in tree {
+        if el.dist_from_root_start >= dist {
+            return true;
+        }
+        if el.arm_dist < a {
+            return false;
+        }
+    }
+    return true;
+}
+
+fn get_first_right_arm_dist_and_segment(tree: &Vec<TreeElForClimbing>, center_pos: f32) -> (f32, usize) {
+    let first_segment = tree.first().unwrap();
+    let a = first_segment.arm_dist;
+    let try_right_arm = center_pos + a;
+    let right_arm_segment = get_segment(try_right_arm, tree, 0);
+    let max_dist;
+    let last_el_num;
+    match right_arm_segment {
+        None => {
+            let last = tree.last().unwrap();
+            max_dist = last.dist_from_root_start + last.length;
+            last_el_num = tree.len() - 1;
+        }
+        Some(right_arm_segment_num) => {
+            max_dist = try_right_arm;
+            last_el_num = right_arm_segment_num;
+        }
+    }
+    let mut a_s: Vec<f32> = vec![max_dist];
+    for el_a in  tree[..=last_el_num].iter().map(|el| el.arm_dist) {
+        if center_pos + el_a < max_dist {
+            a_s.push(el_a);
+        }
+    }
+    a_s.sort_by(|a, b| b.total_cmp(a)); //descending order
+    for el_a in a_s {
+        let dist = center_pos + el_a;
+        if try_a(el_a, dist, tree) {
+            let segment_num_opt = get_segment(dist, tree, 0);
+            match segment_num_opt {
+                None => {return (dist, tree.len() - 1);}
+                Some(segment_num) => {return (dist, segment_num);}
+            }
+        }
+    }
+    (tree.first().unwrap().length, 0)
+}
+
 fn generate_leg_arrays(tree: &Vec<TreeElForClimbing>) {
     let mut left_leg_vec: Vec<LegEndPos> = vec![]; 
     let mut right_leg_vec: Vec<LegEndPos> = vec![]; 
@@ -498,12 +610,11 @@ fn generate_leg_arrays(tree: &Vec<TreeElForClimbing>) {
                                         center_pos});
             let now_segment = tree.first().unwrap();
             let l = now_segment.leg_dist;
-            let a = now_segment.arm_dist;
+            
             let step = now_segment.step;
-            let try_right_arm = center_pos + a;
-            let right_arm_segment = 
-            first_pose = false;
+            
         }
-        let now_segment = tree.get(i).unwrap();
+        first_pose = false;
     }
+    let now_segment = tree.get(i).unwrap();
 }
