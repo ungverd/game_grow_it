@@ -121,130 +121,6 @@ fn add_leaf_segment(straight: bool,
     }
 }
 
-fn get_segments(w: f64, stem: &Vec<crate::TreeUnit>) -> Vec<Segment> {
-    let mut segments_capacity = 0;
-    for item in stem {
-        segments_capacity += item.right * item.repeats;
-        segments_capacity += item.left * item.repeats;
-    }
-    let mut segments = Vec::with_capacity(segments_capacity as usize);
-    let mut center_bottom_x_global = crate::START_X as f64;
-    let mut center_bottom_y_global = crate::START_Y as f64;
-    let mut angle = 0f64;
-    let mut total_distance_from_root = 0f64;
-    for item in stem {
-        let right = item.right;
-        let left = item.left;
-        let f_right = right as f64;
-        let f_left = left as f64;
-        let total_leafs = (left + right) as usize; 
-        let mut bres_seq = Vec::with_capacity(total_leafs);
-        bresenham(left, right, &mut bres_seq);
-        let straight;
-        let radius;
-        let arc_angle;
-        let total_item_length;
-        if right != left {
-            radius = (f_right + f_left) * w / (f_right - f_left) / 2f64; /* positive if inclined left, negative if inclined right */
-            arc_angle = (f_right - f_left) * PI / 6f64; /* positive if inclined left, negative if inclined right */
-            straight = false;
-            total_item_length = radius * arc_angle;
-        } else {
-            straight = true;
-            radius = 0f64;
-            arc_angle = 0f64;
-            total_item_length = f_left * w * PI / 6f64;
-        }
-        let left_segment_angle = arc_angle / f_left;
-        let right_segment_angle = arc_angle / f_right;
-        let left_segment_length = total_item_length / f_left;
-        let right_segment_length = total_item_length / f_right;
-        let mut center_bottom_x_left = center_bottom_x_global;
-        let mut center_bottom_y_left = center_bottom_y_global;
-        let mut center_bottom_x_right = center_bottom_x_global;
-        let mut center_bottom_y_right = center_bottom_y_global;
-        let is_with_zero_opposite = right == 0 || left == 0; 
-        for _i in 0..item.repeats {
-            let mut counter_left = 0;
-            let mut counter_right = 0;
-            for el in &bres_seq {
-
-                let center_bottom_x_left_next;
-                let center_bottom_y_left_next;
-                let center_bottom_x_right_next;
-                let center_bottom_y_right_next;
-                let center_bottom_x;
-                let center_bottom_y;
-                let left;
-                let angle_start;
-                let distance_from_root;
-                if *el == LEFT_BOOL {
-                    left = true;
-                    (center_bottom_x_left_next,
-                     center_bottom_y_left_next,
-                     counter_left,
-                     distance_from_root,
-                     angle_start) = add_leaf_segment(straight,
-                                                    center_bottom_x_left,
-                                                    center_bottom_y_left,
-                                                    angle,
-                                                    counter_left,
-                                                    radius,
-                                                    total_distance_from_root,
-                                                    left_segment_angle,
-                                                    left_segment_length);
-                    center_bottom_x = center_bottom_x_left;
-                    center_bottom_y = center_bottom_y_left;
-                    center_bottom_x_left = center_bottom_x_left_next;
-                    center_bottom_y_left = center_bottom_y_left_next;
-                    
-                } else { // *el == RIGHT_BOOL
-                    left = false;
-                    (center_bottom_x_right_next,
-                     center_bottom_y_right_next,
-                     counter_right,
-                     distance_from_root,
-                     angle_start) = add_leaf_segment(straight,
-                                                    center_bottom_x_right,
-                                                    center_bottom_y_right,
-                                                    angle,
-                                                    counter_right,
-                                                    radius,
-                                                    total_distance_from_root,
-                                                    right_segment_angle,
-                                                    right_segment_length);
-                    center_bottom_x = center_bottom_x_right;
-                    center_bottom_y = center_bottom_y_right;
-                    center_bottom_x_right = center_bottom_x_right_next;
-                    center_bottom_y_right = center_bottom_y_right_next;
-                }
-                let leaf_segment = Segment {center_bottom_x,
-                                                     center_bottom_y,
-                                                     distance_from_root,
-                                                     radius,
-                                                     angle_start,
-                                                     left,
-                                                     straight,
-                                                     is_with_zero_opposite};
-                segments.push(leaf_segment);
-            }
-            if right == 0 {
-                center_bottom_x_global = center_bottom_x_left;
-                center_bottom_y_global = center_bottom_y_left; //+ center_bottom_y_right
-            } else if left == 0 {
-                center_bottom_x_global = center_bottom_x_right;
-                center_bottom_y_global = center_bottom_y_right;
-            } else {
-                center_bottom_x_global = (center_bottom_x_left + center_bottom_x_right) / 2f64;
-                center_bottom_y_global = (center_bottom_y_left + center_bottom_y_right) / 2f64;
-            }
-            angle += arc_angle;
-            total_distance_from_root += total_item_length;
-        }
-    }
-    segments
-}
-
 fn get_rect(w: f64, h: f64, segment: &Segment) -> Rect {
     let mut points = Vec::with_capacity(8);
     let delta_w2 = w - SEMI_W;
@@ -1193,32 +1069,162 @@ impl crate::GameState {
                 SHADOW_STRENGTH);
         shader_str_with_value
     }
+}
 
-    pub fn populate_arr(&mut self) -> usize {
-        let segments = get_segments(F_DEST_REF, &self.tree);
+impl crate::TreeStruct {
+    fn get_segments(&self, w: f64) -> Vec<Segment> {
+        let stem = &self.tree;
+        let mut segments_capacity = 0;
+        for item in stem {
+            segments_capacity += item.right * item.repeats;
+            segments_capacity += item.left * item.repeats;
+        }
+        let mut segments = Vec::with_capacity(segments_capacity as usize);
+        let mut center_bottom_x_global = self.x_start as f64;
+        let mut center_bottom_y_global = self.y_start as f64;
+        let mut angle = 0f64;
+        let mut total_distance_from_root = 0f64;
+        for item in stem {
+            let right = item.right;
+            let left = item.left;
+            let f_right = right as f64;
+            let f_left = left as f64;
+            let total_leafs = (left + right) as usize; 
+            let mut bres_seq = Vec::with_capacity(total_leafs);
+            bresenham(left, right, &mut bres_seq);
+            let straight;
+            let radius;
+            let arc_angle;
+            let total_item_length;
+            if right != left {
+                radius = (f_right + f_left) * w / (f_right - f_left) / 2f64; /* positive if inclined left, negative if inclined right */
+                arc_angle = (f_right - f_left) * PI / 6f64; /* positive if inclined left, negative if inclined right */
+                straight = false;
+                total_item_length = radius * arc_angle;
+            } else {
+                straight = true;
+                radius = 0f64;
+                arc_angle = 0f64;
+                total_item_length = f_left * w * PI / 6f64;
+            }
+            let left_segment_angle = arc_angle / f_left;
+            let right_segment_angle = arc_angle / f_right;
+            let left_segment_length = total_item_length / f_left;
+            let right_segment_length = total_item_length / f_right;
+            let mut center_bottom_x_left = center_bottom_x_global;
+            let mut center_bottom_y_left = center_bottom_y_global;
+            let mut center_bottom_x_right = center_bottom_x_global;
+            let mut center_bottom_y_right = center_bottom_y_global;
+            let is_with_zero_opposite = right == 0 || left == 0; 
+            for _i in 0..item.repeats {
+                let mut counter_left = 0;
+                let mut counter_right = 0;
+                for el in &bres_seq {
+
+                    let center_bottom_x_left_next;
+                    let center_bottom_y_left_next;
+                    let center_bottom_x_right_next;
+                    let center_bottom_y_right_next;
+                    let center_bottom_x;
+                    let center_bottom_y;
+                    let left;
+                    let angle_start;
+                    let distance_from_root;
+                    if *el == LEFT_BOOL {
+                        left = true;
+                        (center_bottom_x_left_next,
+                        center_bottom_y_left_next,
+                        counter_left,
+                        distance_from_root,
+                        angle_start) = add_leaf_segment(straight,
+                                                        center_bottom_x_left,
+                                                        center_bottom_y_left,
+                                                        angle,
+                                                        counter_left,
+                                                        radius,
+                                                        total_distance_from_root,
+                                                        left_segment_angle,
+                                                        left_segment_length);
+                        center_bottom_x = center_bottom_x_left;
+                        center_bottom_y = center_bottom_y_left;
+                        center_bottom_x_left = center_bottom_x_left_next;
+                        center_bottom_y_left = center_bottom_y_left_next;
+                        
+                    } else { // *el == RIGHT_BOOL
+                        left = false;
+                        (center_bottom_x_right_next,
+                        center_bottom_y_right_next,
+                        counter_right,
+                        distance_from_root,
+                        angle_start) = add_leaf_segment(straight,
+                                                        center_bottom_x_right,
+                                                        center_bottom_y_right,
+                                                        angle,
+                                                        counter_right,
+                                                        radius,
+                                                        total_distance_from_root,
+                                                        right_segment_angle,
+                                                        right_segment_length);
+                        center_bottom_x = center_bottom_x_right;
+                        center_bottom_y = center_bottom_y_right;
+                        center_bottom_x_right = center_bottom_x_right_next;
+                        center_bottom_y_right = center_bottom_y_right_next;
+                    }
+                    let leaf_segment = Segment {center_bottom_x,
+                                                        center_bottom_y,
+                                                        distance_from_root,
+                                                        radius,
+                                                        angle_start,
+                                                        left,
+                                                        straight,
+                                                        is_with_zero_opposite};
+                    segments.push(leaf_segment);
+                }
+                if right == 0 {
+                    center_bottom_x_global = center_bottom_x_left;
+                    center_bottom_y_global = center_bottom_y_left; //+ center_bottom_y_right
+                } else if left == 0 {
+                    center_bottom_x_global = center_bottom_x_right;
+                    center_bottom_y_global = center_bottom_y_right;
+                } else {
+                    center_bottom_x_global = (center_bottom_x_left + center_bottom_x_right) / 2f64;
+                    center_bottom_y_global = (center_bottom_y_left + center_bottom_y_right) / 2f64;
+                }
+                angle += arc_angle;
+                total_distance_from_root += total_item_length;
+            }
+        }
+        segments
+    }
+
+    pub fn populate_arr(&self,
+                        drawing_params: &DrawingParams,
+                        mut ubos_arr: &mut [[f32; crate::BUF_LENGTH]]) -> usize {
+        let segments = self.get_segments(F_DEST_REF);
 
         let mut entities_num = 0;
         let mut prev_left = -1;
         let mut prev_right = -1;
+        //let drawing_params = &game_state.drawing_params;
         for segment_num in 0..segments.len() {
             let leaf_segment = &segments[segment_num];
-            let rect = get_rect(self.drawing_params.w_common, self.drawing_params.h_top, leaf_segment);
+            let rect = get_rect(drawing_params.w_common, drawing_params.h_top, leaf_segment);
             populate_leaf(&rect,
                     leaf_segment,
-                    self.drawing_params.leaf_w,
-                    self.drawing_params.leaf_h,
-                    self.drawing_params.leaf_x0,
-                    self.drawing_params.leaf_y0,
+                    drawing_params.leaf_w,
+                    drawing_params.leaf_h,
+                    drawing_params.leaf_x0,
+                    drawing_params.leaf_y0,
                     true,
-                    self.drawing_params.source_ref_ratio,
-                    self.drawing_params.scaling,
-                    &mut self.ubos_arr,
+                    drawing_params.source_ref_ratio,
+                    drawing_params.scaling,
+                    &mut ubos_arr,
                     entities_num,
-                    self.drawing_params.theta_min,
-                    self.drawing_params.theta_max,
-                    self.drawing_params.radius,
-                    self.drawing_params.x_circle,
-                    self.drawing_params.y_circle,
+                    drawing_params.theta_min,
+                    drawing_params.theta_max,
+                    drawing_params.radius,
+                    drawing_params.x_circle,
+                    drawing_params.y_circle,
                     prev_left,
                     prev_right);
             let this_num = entities_num as i32;
@@ -1229,23 +1235,23 @@ impl crate::GameState {
             let trunk_segment_num = get_trunk_segment(&segments, segment_num);
             if trunk_segment_num >= 0 {
                 let trunk_segment = &segments[trunk_segment_num as usize];
-                let rect = get_rect(self.drawing_params.w_common, self.drawing_params.h_bottom, trunk_segment);
+                let rect = get_rect(drawing_params.w_common, drawing_params.h_bottom, trunk_segment);
                 populate_leaf(&rect,
                     trunk_segment,
-                    self.drawing_params.trunk_w,
-                    self.drawing_params.trunk_h,
-                    self.drawing_params.trunk_x0,
-                    self.drawing_params.trunk_y0,
+                    drawing_params.trunk_w,
+                    drawing_params.trunk_h,
+                    drawing_params.trunk_x0,
+                    drawing_params.trunk_y0,
                     false,
-                    self.drawing_params.source_ref_ratio,
-                    self.drawing_params.scaling,
-                    &mut self.ubos_arr,
+                    drawing_params.source_ref_ratio,
+                    drawing_params.scaling,
+                    &mut ubos_arr,
                     entities_num,
-                    self.drawing_params.theta_min,
-                    self.drawing_params.theta_max,
-                    self.drawing_params.radius,
-                    self.drawing_params.x_circle,
-                    self.drawing_params.y_circle,
+                    drawing_params.theta_min,
+                    drawing_params.theta_max,
+                    drawing_params.radius,
+                    drawing_params.x_circle,
+                    drawing_params.y_circle,
                     prev_left,
                     prev_right);
                 entities_num += 1;

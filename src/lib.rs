@@ -1,7 +1,6 @@
 use wasm_bindgen::prelude::*;
 use web_sys::{WebGl2RenderingContext, WebGlBuffer, WebGlFramebuffer, WebGlProgram, WebGlUniformLocation, WebGlVertexArrayObject};
 
-use crate::monkey_running::MonkeyRunning;
 mod tree;
 mod gl_related;
 mod monkey_running;
@@ -20,8 +19,8 @@ pub const UBOS_NAMES: [&'static str; 7] = ["Position_size",
                                        "Radius1_dif1_radius2_dif2"];
 pub const DEST_REF: i32 = 26; // width of tree in pixels
 
-pub const START_X: i32 = 300;
-pub const START_Y: i32 = 1; // coordinates where three starts
+pub const START_X: f32 = 300.0;
+pub const START_Y: f32 = 1.0; // coordinates where three starts
 
 #[wasm_bindgen]
 extern "C" {
@@ -72,20 +71,92 @@ enum MonkeyState {
 struct Monkey {
     monkey_state: MonkeyState,
     running: monkey_running::MonkeyRunning,
-    climbing: monkey_climbing::MonkeyClimbing,
+    climbing_num: usize,
+}
+
+struct TreeStruct {
+    tree: Vec<TreeUnit>,
+    joined_tree: Vec<monkey_climbing::TreeUnitReduced>,
+    tree_state: TreeState,
+    tree_for_climbing: Vec<monkey_climbing::TreeElForClimbing>,
+    left_arm_vec: Vec<monkey_climbing::LimbEndPos>,
+    right_arm_vec: Vec<monkey_climbing::LimbEndPos>,
+    left_leg_vec: Vec<monkey_climbing::LimbEndPos>,
+    right_leg_vec: Vec<monkey_climbing::LimbEndPos>,
+    x_start: f32,
+    y_start: f32,
+    monkey_climbing: monkey_climbing::MonkeyClimbing
+}
+
+impl TreeStruct {
+    fn new(x_start: f32, y_start: f32) -> TreeStruct {
+        TreeStruct {
+            tree: vec![],
+            joined_tree: vec![],
+            tree_state: TreeState { right: 0, left: 0 },
+            tree_for_climbing: vec![],
+            left_arm_vec: vec![],
+            right_arm_vec: vec![],
+            left_leg_vec: vec![],
+            right_leg_vec: vec![],
+            x_start,
+            y_start,
+            monkey_climbing: monkey_climbing::MonkeyClimbing::new(),
+        }
+    }
+
+    fn create_new_tree_unit(&mut self, left:u32, right:u32) {
+        self.tree.push(TreeUnit{left, right, repeats: 1})
+    }
+
+    fn update_tree_for_climbing(&mut self, straight_up_dist: f32, straight_down_dist: f32) {
+        self.make_tree_for_climbing(straight_up_dist,
+                                    straight_down_dist);
+        self.generate_arms_legs_vectors();
+    }
+
+    pub fn grow_tree(&mut self, straight_up_dist: f32, straight_down_dist: f32) {
+        let left = self.tree_state.left;
+        let right = self.tree_state.right;
+        let last = self.tree.last_mut();
+        match last {
+            Some(last) => {
+                if last.left == left && last.right == right {
+                    last.repeats += 1;
+                } else {
+                    self.create_new_tree_unit(left, right);
+                }
+            }
+            None => { self.create_new_tree_unit(left, right); }
+        }
+        self.update_tree_for_climbing(straight_up_dist, straight_down_dist);
+    }
+
+    pub fn undo_grow_tree(&mut self, straight_up_dist: f32, straight_down_dist: f32) {
+        let last = self.tree.last_mut();
+        match last {
+            Some(last) => {
+                if last.repeats > 1 {
+                    last.repeats -= 1;
+                } else {
+                    self.tree.pop();
+                }
+            }
+            None => {}
+        }
+        self.update_tree_for_climbing(straight_up_dist, straight_down_dist);
+    }
 }
 
 #[wasm_bindgen]
 pub struct GameState {
-    tree: Vec<TreeUnit>,
-    tree_for_climbing: Vec<monkey_climbing::TreeElForClimbing>,
+    tree_structs: Vec<TreeStruct>,
     monkey: Monkey,
     drawing_params: tree::DrawingParams,
     context: WebGl2RenderingContext,
     ubos_arr: [[f32; BUF_LENGTH]; NUM_UNIFORM_ARRAYS],
     canvas_width: f32,
     gl_params: GlParameters,
-    tree_state: TreeState,
     monkey_running_program: Option<WebGlProgram>,
     leaf_program: Option<WebGlProgram>,
     monkey_vao: Option<WebGlVertexArrayObject>,
@@ -102,13 +173,11 @@ pub struct GameState {
 #[wasm_bindgen]
 impl GameState {
     pub fn new() -> Result<GameState, JsValue> {
-        let tree: Vec<TreeUnit> = vec![]; 
         let monkey_now = monkey_running::MonkeyRunning::new();
-        let climbing = monkey_climbing::MonkeyClimbing::new();
         let monkey = Monkey{
             monkey_state: MonkeyState::running,
             running: monkey_now,
-            climbing,
+            climbing_num: 0,
         };
         let (straight_up_dist, straight_down_dist) = get_straight_extended_length();
         let drawing_params = tree::DrawingParams{scaling: 0.0,
@@ -138,21 +207,16 @@ impl GameState {
             canvas_w_index: None,
             vert_count: 0,
         };
-        let tree_state = TreeState{
-            right: 0,
-            left: 0,
-        };
-        let tree_for_climbing: Vec<monkey_climbing::TreeElForClimbing> = vec![];
+        let tree_struct = TreeStruct::new(START_X, START_Y);
+        let tree_structs: Vec<TreeStruct> = vec![tree_struct];
         Ok(GameState {
-            tree,
-            tree_for_climbing,
+            tree_structs,
             monkey,
             drawing_params,
             context,
             ubos_arr,
             canvas_width,
             gl_params,
-            tree_state,
             monkey_running_program: None,
             leaf_program: None,
             monkey_vao: None,
@@ -168,31 +232,31 @@ impl GameState {
     }
 
     #[wasm_bindgen]
-    pub fn left_plus(&mut self) -> u32 {
-        self.tree_state.left += 1;
-        self.tree_state.left
+    pub fn left_plus(&mut self) -> u32 { // TODO rewrite for multiple trees
+        self.tree_structs.first_mut().unwrap().tree_state.left += 1;
+        self.tree_structs.first().unwrap().tree_state.left
     }
 
     #[wasm_bindgen]
-    pub fn left_minus(&mut self) -> u32 {
-        if self.tree_state.left > 0 {
-            self.tree_state.left -= 1;
+    pub fn left_minus(&mut self) -> u32 { // TODO rewrite for multiple trees
+        if self.tree_structs.first().unwrap().tree_state.left > 0 {
+            self.tree_structs.first_mut().unwrap().tree_state.left -= 1;
         }
-        self.tree_state.left
+        self.tree_structs.first().unwrap().tree_state.left
     }
 
     #[wasm_bindgen]
-    pub fn right_plus(&mut self) -> u32 {
-        self.tree_state.right += 1;
-        self.tree_state.right
+    pub fn right_plus(&mut self) -> u32 { // TODO rewrite for multiple trees
+        self.tree_structs.first_mut().unwrap().tree_state.right += 1;
+        self.tree_structs.first().unwrap().tree_state.right
     }
 
     #[wasm_bindgen]
-    pub fn right_minus(&mut self) -> u32 {
-        if self.tree_state.right > 0 {
-            self.tree_state.right -= 1;
+    pub fn right_minus(&mut self) -> u32 { // TODO rewrite for multiple trees
+        if self.tree_structs.first().unwrap().tree_state.right > 0 {
+            self.tree_structs.first_mut().unwrap().tree_state.right -= 1;
         }
-        self.tree_state.right
+        self.tree_structs.first().unwrap().tree_state.right
     }
 
     pub fn do_shader_stuff_and_constants(&mut self,
@@ -261,60 +325,31 @@ impl GameState {
         Ok(())
     }
 
-    fn create_new_tree_unit(&mut self, left:u32, right:u32) {
-        self.tree.push(TreeUnit{left, right, repeats: 1})
-    }
-
-    fn update_tree_for_climbing(&mut self) {
-        self.tree_for_climbing = monkey_climbing::make_tree_for_climbing(&self.tree,
-            START_X as f32,
-            START_Y as f32,
-            self.straight_up_dist,
-            self.straight_down_dist);
-    }
-
     #[wasm_bindgen]
     pub fn grow_tree(&mut self) -> Result<(), JsValue> {
-        let left = self.tree_state.left;
-        let right = self.tree_state.right;
-        let last = self.tree.last_mut();
-        match last {
-            Some(last) => {
-                if last.left == left && last.right == right {
-                    last.repeats += 1;
-                } else {
-                    self.create_new_tree_unit(left, right);
-                }
-            }
-            None => { self.create_new_tree_unit(left, right); }
+        for tree_struct in &mut self.tree_structs {
+            tree_struct.grow_tree(self.straight_up_dist, self.straight_down_dist);
         }
-        self.update_tree_for_climbing();
         self.draw_tree()?;
         Ok(())
     }
 
     #[wasm_bindgen]
     pub fn undo_grow_tree(&mut self) -> Result<(), JsValue> {
-        let last = self.tree.last_mut();
-        match last {
-            Some(last) => {
-                if last.repeats > 1 {
-                    last.repeats -= 1;
-                } else {
-                    self.tree.pop();
-                }
-            }
-            None => {}
+        for tree_struct in &mut self.tree_structs {
+            tree_struct.undo_grow_tree(self.straight_up_dist, self.straight_down_dist);
         }
-        self.update_tree_for_climbing();
         self.draw_tree()?;
         Ok(())
     }
 
-    fn draw_tree(&mut self) -> Result<(), JsValue> {
+    fn draw_tree(&mut self) -> Result<(), JsValue> { // TODO: rewrite for multiple trees
         self.context.use_program(self.leaf_program.as_ref());
         self.context.bind_vertex_array(self.leaf_vao.as_ref());
-        let rects_count = self.populate_arr();
+        let drawing_params = &self.drawing_params;
+        let ubos_arr = &mut self.ubos_arr;
+        let tree_struct = self.tree_structs.first().unwrap(); // TODO: rewrite!
+        let rects_count = tree_struct.populate_arr(drawing_params, ubos_arr);
         gl_related::bind_ubos_for_tree(&self.ubos_arr, &self.context, None, false)?;
         self.context.uniform1ui(self.gl_params.rect_count_index.as_ref(), rects_count as u32);
         self.context.uniform1f(self.gl_params.canvas_w_index.as_ref(), self.canvas_width);
@@ -335,7 +370,10 @@ impl GameState {
         Ok(())
     }
 
-    pub fn onclick(&mut self, x_click: f32) {
+    pub fn onclick(&mut self, x_click: f32, y_click: f32) {
+        for tree_struct in self.tree_structs.iter().rev() {
+            if tree_struct.
+        }
         self.monkey.running.onclick(x_click);
     }
 
