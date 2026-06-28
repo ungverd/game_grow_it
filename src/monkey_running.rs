@@ -1,11 +1,11 @@
-const MONKEY_START_X: f32 = 200.0;
-const MONKEY_START_Y: f32 = 1.0;
+pub const MONKEY_START_X: f32 = 200.0;
+pub const MONKEY_START_Y: f32 = 1.0;
 const MONKEY_SCALING: f32 = 0.7; // 0.5 - monkey will be drawn smaller
 
 pub struct MonkeyRunning {
     x_pos: f32,
     y_pos: f32,
-    is_running: bool,
+    pub is_running: bool,
     is_left: bool,
     parameters: MonkeyRunningDrawParameters,
     pub vertex_arr: [f32; 12],
@@ -91,7 +91,7 @@ impl MonkeyRunning {
         (horizontal as f32, vertical as f32)
     }
 
-    pub fn onclick(&mut self, new_x: f32) {
+    pub fn set_goal(&mut self, new_x: f32) {
         if new_x != self.x_pos {
             self.desired_x = new_x;
             let new_is_left = new_x < self.x_pos;
@@ -180,6 +180,14 @@ impl MonkeyRunning {
         self.y_pos = y;
         self.is_running = false;
         self.desired_x = x;
+        self.start_x = x;
+    }
+
+    pub fn set_on_pos_with_dest(&mut self, x: f32, y:f32, desired_x: f32) {
+        self.x_pos = x;
+        self.y_pos = y;
+        self.is_running = true;
+        self.desired_x = desired_x;
         self.start_x = x;
     }
 }

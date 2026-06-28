@@ -64,14 +64,36 @@ struct TreeState {
 }
 
 enum MonkeyState {
-    running,
-    climbing,
+    Running,
+    Climbing,
 }
 
+struct TreeGoal {
+    tree_index: usize,
+    tree_height: f32,
+}
+enum MonkeyGoal {
+    Tree(TreeGoal),
+    Floor(f32),
+}
 struct Monkey {
     monkey_state: MonkeyState,
     running: monkey_running::MonkeyRunning,
     climbing_num: usize,
+    monkey_goal: MonkeyGoal,
+}
+
+impl Monkey {
+    fn set_tree_goal(&mut self, tree_index: usize, tree_height:f32) {
+        let tree_goal = TreeGoal{
+            tree_index,
+            tree_height,
+        };
+        self.monkey_goal = MonkeyGoal::Tree(tree_goal);
+    }
+    fn set_floor_goal(&mut self, x: f32) {
+        self.monkey_goal = MonkeyGoal::Floor(x);
+    }
 }
 
 struct TreeStruct {
@@ -85,11 +107,12 @@ struct TreeStruct {
     right_leg_vec: Vec<monkey_climbing::LimbEndPos>,
     x_start: f32,
     y_start: f32,
-    monkey_climbing: monkey_climbing::MonkeyClimbing
+    monkey_climbing: monkey_climbing::MonkeyClimbing,
+    tree_index: usize,
 }
 
 impl TreeStruct {
-    fn new(x_start: f32, y_start: f32) -> TreeStruct {
+    fn new(x_start: f32, y_start: f32, tree_index: usize) -> TreeStruct {
         TreeStruct {
             tree: vec![],
             joined_tree: vec![],
@@ -102,6 +125,7 @@ impl TreeStruct {
             x_start,
             y_start,
             monkey_climbing: monkey_climbing::MonkeyClimbing::new(),
+            tree_index,
         }
     }
 
@@ -174,10 +198,12 @@ pub struct GameState {
 impl GameState {
     pub fn new() -> Result<GameState, JsValue> {
         let monkey_now = monkey_running::MonkeyRunning::new();
+        let monkey_goal = MonkeyGoal::Floor(monkey_running::MONKEY_START_X);
         let monkey = Monkey{
-            monkey_state: MonkeyState::running,
+            monkey_state: MonkeyState::Running,
             running: monkey_now,
             climbing_num: 0,
+            monkey_goal,
         };
         let (straight_up_dist, straight_down_dist) = get_straight_extended_length();
         let drawing_params = tree::DrawingParams{scaling: 0.0,
@@ -207,7 +233,7 @@ impl GameState {
             canvas_w_index: None,
             vert_count: 0,
         };
-        let tree_struct = TreeStruct::new(START_X, START_Y);
+        let tree_struct = TreeStruct::new(START_X, START_Y, 0);
         let tree_structs: Vec<TreeStruct> = vec![tree_struct];
         Ok(GameState {
             tree_structs,
@@ -340,6 +366,7 @@ impl GameState {
             tree_struct.undo_grow_tree(self.straight_up_dist, self.straight_down_dist);
         }
         self.draw_tree()?;
+        self.monkey.update_if_segment_disappears(&mut self.tree_structs);
         Ok(())
     }
 
@@ -372,18 +399,105 @@ impl GameState {
 
     pub fn onclick(&mut self, x_click: f32, y_click: f32) {
         for tree_struct in self.tree_structs.iter().rev() {
-            if tree_struct.
+            match tree_struct.get_dest_on_click(x_click, y_click) {
+                Some(val) => {
+                    self.monkey.set_tree_goal(tree_struct.tree_index, val);
+                    return;
+                }
+                None => {}
+            }
         }
-        self.monkey.running.onclick(x_click);
+        self.monkey.set_floor_goal(x_click);
+        self.set_new_local_goal();
+    }
+
+    fn set_new_local_goal(&mut self) {
+        match &self.monkey.monkey_state {
+            MonkeyState::Running => {
+                let new_x;
+                match &self.monkey.monkey_goal {
+                    MonkeyGoal::Floor(goal_x) => {new_x = goal_x}
+                    MonkeyGoal::Tree(tree_goal) => {
+                        let tree_to_run = &self.tree_structs[tree_goal.tree_index];
+                        new_x = &tree_to_run.x_start;
+                    }
+                }
+                self.monkey.running.set_goal(*new_x);}
+            MonkeyState::Climbing => {
+                let now_climbing_num = self.monkey.climbing_num;
+                let monkey_climbing = &mut self.tree_structs[now_climbing_num].monkey_climbing;
+                let now_tree_goal;
+                match &self.monkey.monkey_goal {
+                    MonkeyGoal::Floor(_) => {now_tree_goal = monkey_climbing::MIN_DIST_FROM_ROOT;}
+                    MonkeyGoal::Tree(tree_goal) => {
+                        if tree_goal.tree_index == now_climbing_num {
+                            now_tree_goal = tree_goal.tree_height;
+                        } else{
+                            now_tree_goal = monkey_climbing::MIN_DIST_FROM_ROOT;
+                        }
+                    }
+                }
+                monkey_climbing.set_goal(now_tree_goal);
+            }
+        }
     }
 
     pub fn on_animation_frame(&mut self, deltat: f32) -> Result<(), JsValue> {
-        self.monkey.running.on_animation_frame(deltat);
-        gl_related::apply_arrays_monkey(&self.context,
-            &self.monkey.running.vertex_arr,
-            &self.monkey.running.texture_arr,
-            self.monkey_position_buffer.as_ref(),
-            self.monkey_tex_coord_buffer.as_ref());
+        match self.monkey.monkey_state {
+            MonkeyState::Running => {
+                self.monkey.running.on_animation_frame(deltat);
+                if !self.monkey.running.is_running {
+                    match &self.monkey.monkey_goal {
+                        MonkeyGoal::Floor(_) => {}
+                        MonkeyGoal::Tree(tree_goal) => {
+                            self.monkey.monkey_state = MonkeyState::Climbing;
+                            self.monkey.climbing_num = tree_goal.tree_index;
+                            let now_tree = self.tree_structs[tree_goal.tree_index];
+                            now_tree.monkey_climbing.set_goal(tree_goal.tree_height);
+                            now_tree.monkey_climbing.on_goal = false;
+                            now_tree.set_monkey_height(monkey_climbing::MIN_DIST_FROM_ROOT);
+                        }
+                    }
+                }
+            }
+            MonkeyState::Climbing => {
+                let tree_num = self.monkey.climbing_num;
+                let now_tree = self.tree_structs[tree_num];
+                let monkey_climbing = &now_tree.monkey_climbing;
+                now_tree.on_animation_frame(deltat);
+                if monkey_climbing.on_goal {
+                    match &self.monkey.monkey_goal {
+                        MonkeyGoal::Floor(val) => {
+                            self.monkey.monkey_state = MonkeyState::Running;
+                            self.monkey.running.set_on_pos_with_dest(
+                                now_tree.x_start,
+                                monkey_running::MONKEY_START_Y,
+                                *val);
+                        }
+                        MonkeyGoal::Tree(tree_goal) => {
+                            if tree_goal.tree_index != tree_num {
+                                let another_tree = self.tree_structs[tree_goal.tree_index];
+                                self.monkey.monkey_state = MonkeyState::Running;
+                                self.monkey.running.set_on_pos_with_dest(
+                                    now_tree.x_start,
+                                    monkey_running::MONKEY_START_Y,
+                                    another_tree.x_start);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        match self.monkey.monkey_state {
+            MonkeyState::Running => {
+            gl_related::apply_arrays_monkey(&self.context,
+                &self.monkey.running.vertex_arr,
+                &self.monkey.running.texture_arr,
+                self.monkey_position_buffer.as_ref(),
+                self.monkey_tex_coord_buffer.as_ref());
+            }
+            MonkeyState::Climbing => {}
+        }
         self.draw_monkey()?;
         Ok(())
     }

@@ -1,3 +1,5 @@
+use std::f32::MIN;
+
 use crate::START_X;
 
 pub const DELTAX_FRONT: f32 = 3.0; //px
@@ -6,18 +8,28 @@ pub const DELTAY_FRONT: f32 = 11.0; //px
 pub const DELTAY_BACK: f32 = 11.0; //px
 pub const LEG_SEGMENT_LENGTH: f32 = 10.0; //px
 pub const ARM_SEGMENT_LENGTH: f32 = 9.0; //px
-const MIN_DIST_FROM_ROOT: f32 = 5.0; //px, must be less then W * PI / 6 / 2
+pub const MIN_DIST_FROM_ROOT: f32 = 5.0; //px, must be less then W * PI / 6 / 2
 const PI: f32 = std::f32::consts::PI;
 pub const W: f32 = crate::DEST_REF as f32; // three width in px
 const CLIMBING_SPEED: f32 = 50.0; // px/s
 pub const LEG_EXTENSION_COEFFICIENT: f32 = 1.9; // must be lightly under 2, bigger -> leg more straight
 const STEP_RATIO: f32 = 2.0; // max distance between arm and leg is 2 times larger than min distance
 
+struct Pos {
+    x: f32,
+    y: f32,
+}
+
 pub struct MonkeyClimbing {
     total_height: f32,
     now_segment: usize,
-    body_x: f32,
-    body_y: f32,
+    body_pos: Pos,
+    left_arm_pos: Pos,
+    right_arm_pos: Pos,
+    left_leg_pos: Pos,
+    right_leg_pos: Pos,
+    goal_height: f32,
+    pub on_goal: bool,
 }
 
 struct TreeElForClimbingNotLinear {
@@ -164,6 +176,33 @@ impl crate::TreeStruct {
         }
         self.tree_for_climbing = tree_for_climbing;
     }
+
+    pub fn monkey_on_animation_frame(&mut self, deltat: f32, v: f32) {
+        let mut new_height;
+        if !self.monkey_climbing.on_goal {
+            if self.monkey_climbing.goal_height > self.monkey_climbing.total_height {
+                new_height = self.monkey_climbing.total_height + deltat * v;
+                if new_height >= self.monkey_climbing.goal_height {
+                    new_height = self.monkey_climbing.goal_height;
+                    self.monkey_climbing.on_goal = true;
+                }
+            }
+            else {
+                new_height = self.monkey_climbing.total_height - deltat * v;
+                if new_height <= self.monkey_climbing.goal_height {
+                    new_height = self.monkey_climbing.goal_height;
+                    self.monkey_climbing.on_goal = true;
+                }
+            }
+            self.monkey_climbing.total_height = new_height;
+            self.update_monkey_based_on_height()
+        }
+    }
+
+    pub fn set_monkey_height(&mut self, height: f32) {
+        self.monkey_climbing.total_height = height;
+        self.update_monkey_based_on_height();
+    }
 }
 
 fn get_segment_x_y_after_verif(dist_from_root: f32,
@@ -268,9 +307,17 @@ impl MonkeyClimbing {
         MonkeyClimbing{
             total_height: 0.0,
             now_segment: 0,
-            body_x: 0.0,
-            body_y: 0.0,
+            body_pos: Pos{x: 0.0, y: 0.0},
+            right_arm_pos: Pos{x: 0.0, y: 0.0},
+            left_arm_pos: Pos{x: 0.0, y: 0.0},
+            right_leg_pos: Pos{x: 0.0, y: 0.0},
+            left_leg_pos: Pos{x: 0.0, y: 0.0},
+            goal_height: 0.0,
+            on_goal: false,
         }
+    }
+    pub fn set_goal(&mut self, goal: f32) {
+        self.goal_height = goal;
     }
 }
 
@@ -279,42 +326,38 @@ impl crate::TreeStruct {
         let tree_for_climbing = &self.tree_for_climbing;
         let monkey_climbing = &mut self.monkey_climbing; 
         let last = tree_for_climbing.last().unwrap();
-        let num = tree_for_climbing.len() - 1;
-        monkey_climbing.now_segment = num;
         monkey_climbing.total_height = last.dist_from_root_start + last.length;
-        (monkey_climbing.body_x, monkey_climbing.body_y) = get_segment_x_y_after_verif(monkey_climbing.total_height,
-                                                                        last);
+        self.update_monkey_based_on_height();
     }
+    
+    fn update_monkey_based_on_height(&mut self) {
+        self.get_segment_x_y_dist_from_root_body()
+    }
+
 }
 
 impl crate::Monkey {
-    fn get_body_x_y_and_update_segment(&mut self,
+    pub fn update_if_segment_disappears(&mut self,
                                        tree_structs: &mut Vec<crate::TreeStruct>) {
-        // Do this after updating total_height or tree undo 
-        let tree_struct = tree_structs.get_mut(self.climbing_num).unwrap();
-        let tree_for_climbing = &tree_struct.tree_for_climbing;
-        let climbing = &tree_struct.monkey_climbing;
-        let current_segment = tree_for_climbing.get(climbing.now_segment);
-        match &current_segment {
-            None => {
-                if tree_for_climbing.is_empty() {
-                    self.monkey_state = crate::MonkeyState::running;
-                    self.running.set_on_pos(tree_struct.x_start, tree_struct.y_start as f32);
-                } else {
-                    tree_struct.go_to_top();
+        // Do this after tree undo
+        match &self.monkey_state {
+            crate::MonkeyState::Running => {}
+            crate::MonkeyState::Climbing => {
+                let tree_struct = tree_structs.get_mut(self.climbing_num).unwrap();
+                let tree_for_climbing = &tree_struct.tree_for_climbing;
+                let climbing = &tree_struct.monkey_climbing;
+                let current_segment = tree_for_climbing.get(climbing.now_segment);
+                match &current_segment {
+                    None => {
+                        if tree_for_climbing.is_empty() {
+                            self.monkey_state = crate::MonkeyState::Running;
+                            self.running.set_on_pos(tree_struct.x_start, tree_struct.y_start as f32);
+                        } else {
+                            tree_struct.go_to_top();
+                        }
+                    }
+                    Some(_) => {}
                 }
-            }
-            Some(_) => {
-                let (new_seg_num,
-                     new_x,
-                     new_y,
-                     new_total_height) = tree_struct.get_segment_x_y_dist_from_root_body(climbing.total_height,
-                                                                 climbing.now_segment);
-                let climbing = &mut tree_struct.monkey_climbing;
-                climbing.body_x = new_x;
-                climbing.body_y = new_y;
-                climbing.total_height = new_total_height;
-                climbing.now_segment = new_seg_num;
             }
         }
     } 
@@ -563,7 +606,7 @@ impl MonkeyClimbingNodePoint {
 
 impl TreeElForClimbing {
     fn is_onclick(&self, x: f32, y: f32) -> Option<f32> {
-        match self.for_not_linear {
+        match &self.for_not_linear {
             Some(not_linear) => {
                 let dif_x = x - not_linear.center_x;
                 let dif_y = y - not_linear.center_y;
@@ -571,24 +614,26 @@ impl TreeElForClimbing {
                 if (not_linear.radius.abs() - r).abs() > W / 2.0 {
                     return None;
                 }
-                let angle = dif_y.atan2(dif_x);
+                let mut angle = dif_y.atan2(dif_x);
+                if not_linear.radius < 0.0 {
+                    angle = angle - PI;
+                }
                 let converted_alpha1 = (self.angle_start - angle) / (2.0 * PI);
                 let converted_alpha2 = (not_linear.angle_stop - angle) / (2.0 * PI);
-                let start;
-                let end;
-                if (not_linear.angle_stop > self.angle_start) {
-                    start = int(ceil(converted_alpha1));
-                    end = int(floor(converted_alpha2));
+                let candidate;
+                if not_linear.angle_stop > self.angle_start {
+                    candidate = converted_alpha2.floor();
+                    if candidate < converted_alpha1 {
+                        return None
+                    }
                 } else {
-                    start = int(ceil(converted_alpha2));
-                    end = int(floor(converted_alpha1));
+                    candidate = converted_alpha2.ceil();
+                    if candidate > converted_alpha1 {
+                        return None
+                    }
                 }
-                for y_before_conversion in start..=end; y_before_conversion++ {
-                            float y_angle = float(y_before_conversion) * (2.0 * PI) + gamma;
-                            float beta_rate = (y_angle - converted_angle_start) / beta;
-                            float height_this_point_source = source_h * beta_rate;
-                            float y_source = source_y0 + height_this_point_source;
-                }
+                return Some(self.dist_from_root_start +
+                            self.length * (candidate - converted_alpha1) / (converted_alpha2 - converted_alpha1))
             },
             None => {
                 let x_conv = x - self.start_x;
@@ -754,9 +799,16 @@ impl crate::TreeStruct {
         self.right_leg_vec = right_leg_vec;
     }
 
-    pub fn 
-
     pub fn get_dest_on_click(&self, x:f32, y: f32) -> Option<f32> {
-        for self.red
+        for el in self.tree_for_climbing.iter().rev() {
+            match el.is_onclick(x, y) {
+                Some(val) => {
+                    let res = if val > MIN_DIST_FROM_ROOT {val} else {MIN_DIST_FROM_ROOT};
+                    return Some(res)
+                }
+                None => {}
+            }
+        }
+        return None;
     }
 }
