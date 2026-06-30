@@ -7,14 +7,14 @@ pub struct MonkeyRunning {
     y_pos: f32,
     pub is_running: bool,
     is_left: bool,
-    parameters: MonkeyRunningDrawParameters,
+    pub parameters: MonkeyRunningDrawParameters,
     pub vertex_arr: [f32; 12],
     pub texture_arr: [f32; 12],
     start_x: f32,
     desired_x: f32,
 }
 
-struct MonkeyRunningDrawParameters {
+pub struct MonkeyRunningDrawParameters {
     monkey_width: f32,
     monkey_height: f32,
     width_screen: f32,
@@ -28,7 +28,7 @@ struct MonkeyRunningDrawParameters {
     advancement_px: f32, // number of pixels monkey will advance during one animation loop
     number_horizontal: i32,
     number_vertical: i32,
-    v: f32,
+    pub v: f32,
 }
 
 impl MonkeyRunning {

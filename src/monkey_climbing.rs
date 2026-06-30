@@ -15,19 +15,23 @@ const CLIMBING_SPEED: f32 = 50.0; // px/s
 pub const LEG_EXTENSION_COEFFICIENT: f32 = 1.9; // must be lightly under 2, bigger -> leg more straight
 const STEP_RATIO: f32 = 2.0; // max distance between arm and leg is 2 times larger than min distance
 
+#[derive(Debug)]
 struct Pos {
     x: f32,
     y: f32,
+}
+
+impl Pos {
+    fn new() -> Pos {
+        Pos{x: 0.0, y: 0.0}
+    }
 }
 
 pub struct MonkeyClimbing {
     total_height: f32,
     now_segment: usize,
     body_pos: Pos,
-    left_arm_pos: Pos,
-    right_arm_pos: Pos,
-    left_leg_pos: Pos,
-    right_leg_pos: Pos,
+    left_arm_right_arm_left_leg_right_leg: [Pos; 4],
     goal_height: f32,
     pub on_goal: bool,
 }
@@ -307,11 +311,8 @@ impl MonkeyClimbing {
         MonkeyClimbing{
             total_height: 0.0,
             now_segment: 0,
-            body_pos: Pos{x: 0.0, y: 0.0},
-            right_arm_pos: Pos{x: 0.0, y: 0.0},
-            left_arm_pos: Pos{x: 0.0, y: 0.0},
-            right_leg_pos: Pos{x: 0.0, y: 0.0},
-            left_leg_pos: Pos{x: 0.0, y: 0.0},
+            body_pos: Pos::new(),
+            left_arm_right_arm_left_leg_right_leg: [Pos::new(), Pos::new(), Pos::new(), Pos::new()],
             goal_height: 0.0,
             on_goal: false,
         }
@@ -321,6 +322,7 @@ impl MonkeyClimbing {
     }
 }
 
+
 impl crate::TreeStruct {
     fn go_to_top(&mut self) {
         let tree_for_climbing = &self.tree_for_climbing;
@@ -329,9 +331,77 @@ impl crate::TreeStruct {
         monkey_climbing.total_height = last.dist_from_root_start + last.length;
         self.update_monkey_based_on_height();
     }
+
+    fn get_cand_pre_pos(&self, ind: usize) -> Option<(&LimbsPos, &LimbsPos)> {
+        let pos1 = self.limbs_vec.get(ind);
+        let pos2 = self.limbs_vec.get(ind + 1);
+        match pos1 {
+            Some(po1) => {
+                match pos2 {
+                    Some(po2) => {return Some((po1, po2))}
+                    None => {return Some((po1, po1))}
+                }
+            }
+            None => {
+                match pos2 {
+                    Some(po2) => {return Some((po2, po2))}
+                    None => {return None}
+                }
+            }
+        }
+    }
     
     fn update_monkey_based_on_height(&mut self) {
-        self.get_segment_x_y_dist_from_root_body()
+        let dist_from_root = self.monkey_climbing.total_height;
+        let segment_num = self.monkey_climbing.now_segment;
+        let (actual_segment_num,
+             x,
+             y,
+             actual_dist_from_root) = self.get_segment_x_y_dist_from_root_body(dist_from_root, segment_num);
+        self.monkey_climbing.total_height = actual_dist_from_root;
+        let body_pos = Pos{x, y};
+        self.monkey_climbing.body_pos = body_pos;
+        self.monkey_climbing.now_segment = actual_segment_num;
+        let mut found = false;
+        let mut ind = 0;
+        while !found {
+            let res = self.get_cand_pre_pos(ind);
+            match res {
+                None => {
+                    found = true;
+                    ind = if ind == 0 {0} else {ind - 1};
+                }
+                Some(re) => {
+                    let (pos1, pos2) = re;
+                    if self.monkey_climbing.total_height < pos1.center_pos {
+                        ind += 1;
+                    } else {
+                        found = true;
+                    }
+                }
+            }
+        }
+        let (pos1, pos2) = self.get_cand_pre_pos(ind).unwrap();
+        let body_height = self.monkey_climbing.total_height;
+        let center1 = pos1.center_pos;
+        let center2 = pos2.center_pos;
+        let coef;
+        let dif = center2 - center1;
+        if dif.abs() < 0.000000001 {
+            coef = 0.5
+        } else {
+            coef = (body_height - center1) / dif
+        }
+        let arr1 = &pos1.left_arm_right_arm_left_leg_right_leg;
+        let arr2 = &pos2.left_arm_right_arm_left_leg_right_leg;
+        let mut left_arm_right_arm_left_leg_right_leg: Vec<Pos> = vec![];
+        for it in arr1.iter().zip(arr2.iter()) {
+            let (p1, p2) = it;
+            let x = (p2.x - p1.x) * coef + p1.x;
+            let y = (p2.y - p1.y) * coef + p1.y;
+            left_arm_right_arm_left_leg_right_leg.push(Pos{x, y});
+        }
+        self.monkey_climbing.left_arm_right_arm_left_leg_right_leg = left_arm_right_arm_left_leg_right_leg.try_into().unwrap();
     }
 
 }
@@ -404,9 +474,8 @@ fn get_circ_extended_length(r: f32) -> (f32, f32) {
     (converted_length_up, converted_length_down)
 }
 
-pub struct LimbEndPos {
-    limb_pos_x: f32,
-    limb_pos_y: f32,
+pub struct LimbsPos {
+    left_arm_right_arm_left_leg_right_leg: [Pos; 4],
     center_pos:f32, // if center is between center_pos1 and center_pos2,
                     // leg_end will be interpolated between leg_pos1 and leg_pos2.
                     // center_pos is distance from root
@@ -414,7 +483,7 @@ pub struct LimbEndPos {
 
 fn get_limb_pos_x_y_segment_known(dist_from_root: f32,
                              segment: &TreeElForClimbing,
-                             is_left: bool) -> (f32, f32) {
+                             is_left: bool) -> Pos {
     let dist_from_start_segment = dist_from_root - segment.dist_from_root_start;
     let multiplier = if is_left {-1.0} else {1.0};
     match &segment.for_not_linear {
@@ -423,14 +492,14 @@ fn get_limb_pos_x_y_segment_known(dist_from_root: f32,
             let center_y = segment.start_y + dist_from_start_segment * segment.angle_start.cos();
             let pos_x = center_x + W / 2.0 * multiplier * segment.angle_start.cos();
             let pos_y = center_y + W / 2.0 * multiplier * segment.angle_start.sin();
-            (pos_x, pos_y)
+            Pos{x: pos_x, y: pos_y}
         }
         Some(el) => {
             let now_radius = el.radius + W / 2.0 * multiplier;
             let now_angle = dist_from_start_segment / segment.length * (el.angle_stop - segment.angle_start);
             let pos_x = el.center_x + now_radius * now_angle.cos();
             let pos_y = el.center_y + now_radius * now_angle.sin();
-            (pos_x, pos_y)
+            Pos{x: pos_x, y: pos_y}
         }
     }
 }
@@ -439,7 +508,7 @@ impl crate::TreeStruct {
     fn get_limb_pos_x_y(&self,
                 dist_from_root: f32,
                 current_segment: usize,
-                is_left: bool) -> (f32, f32) {
+                is_left: bool) -> Pos {
         let tree = &self.tree_for_climbing;
         let current_segment_obj = tree.get(current_segment).unwrap();
         if dist_from_root >= current_segment_obj.dist_from_root_start {
@@ -483,7 +552,7 @@ impl crate::TreeStruct {
                 }
             }
         }
-        return (-1.0, -1.0); // must not get here
+        return Pos{x: -1.0, y: -1.0}; // must not get here
     }
 }    
 
@@ -755,10 +824,7 @@ impl crate::TreeStruct {
 
     pub fn generate_arms_legs_vectors(&mut self) {
         let poses = self.generate_poses_vector();
-        let mut left_arm_vec: Vec<LimbEndPos> = vec![];
-        let mut right_arm_vec: Vec<LimbEndPos> = vec![];
-        let mut left_leg_vec: Vec<LimbEndPos> = vec![];
-        let mut right_leg_vec: Vec<LimbEndPos> = vec![];
+        let mut limbs_vec: Vec<LimbsPos> = vec![];
         for pos in poses {
             let center_pos = pos.center_pos;
             let left_arm_pos;
@@ -776,27 +842,25 @@ impl crate::TreeStruct {
                 left_leg_pos = pos.down_leg_pos;
                 right_leg_pos = pos.up_leg_pos;
             }
-            let (left_arm_x, left_arm_y) = self.get_limb_pos_x_y(left_arm_pos,
+            let left_arm_coords = self.get_limb_pos_x_y(left_arm_pos,
                                                         pos.center_segment_num,
                                                         true);
-            left_arm_vec.push(LimbEndPos { limb_pos_x: left_arm_x, limb_pos_y: left_arm_y, center_pos });
-            let (right_arm_x, right_arm_y) = self.get_limb_pos_x_y(right_arm_pos,
+            let right_arm_coords = self.get_limb_pos_x_y(right_arm_pos,
                                                         pos.center_segment_num,
                                                         false);
-            right_arm_vec.push(LimbEndPos { limb_pos_x: right_arm_x, limb_pos_y: right_arm_y, center_pos });
-            let (left_leg_x, left_leg_y) = self.get_limb_pos_x_y(left_leg_pos,
+            let left_leg_coords = self.get_limb_pos_x_y(left_leg_pos,
                                                         pos.center_segment_num,
                                                         true);
-            left_leg_vec.push(LimbEndPos { limb_pos_x: left_leg_x, limb_pos_y: left_leg_y, center_pos });
-            let (right_leg_x, right_leg_y) = self.get_limb_pos_x_y(right_leg_pos,
+            let right_leg_coords = self.get_limb_pos_x_y(right_leg_pos,
                                                         pos.center_segment_num,
                                                         false);
-            right_leg_vec.push(LimbEndPos { limb_pos_x: right_leg_x, limb_pos_y: right_leg_y, center_pos });
+            let left_arm_right_arm_left_leg_right_leg = [left_arm_coords,
+                                                                   right_arm_coords,
+                                                                   left_leg_coords,
+                                                                   right_leg_coords];
+            limbs_vec.push(LimbsPos { left_arm_right_arm_left_leg_right_leg, center_pos });
         }
-        self.left_arm_vec = left_arm_vec;
-        self.right_arm_vec = right_arm_vec;
-        self.left_leg_vec = left_leg_vec;
-        self.right_leg_vec = right_leg_vec;
+        self.limbs_vec = limbs_vec;
     }
 
     pub fn get_dest_on_click(&self, x:f32, y: f32) -> Option<f32> {
