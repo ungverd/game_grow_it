@@ -189,5 +189,10 @@ impl MonkeyRunning {
         self.is_running = true;
         self.desired_x = desired_x;
         self.start_x = x;
+        if desired_x > x {
+            self.is_left = false;
+        } else {
+            self.is_left = true;
+        }
     }
 }

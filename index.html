@@ -146,7 +146,8 @@
             function onCanvasClick(e) {
               var rect = canvas.getBoundingClientRect();
     		      x = e.clientX - rect.left;
-              gamestate.onclick(x);
+    		      y = 600 + rect.top - e.clientY;
+              gamestate.onclick(x, y);
             }
             canvas.onclick = onCanvasClick;
 

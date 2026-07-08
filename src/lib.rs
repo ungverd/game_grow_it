@@ -52,6 +52,11 @@ pub struct TreeUnit {
     repeats: u32,
 }
 
+#[derive(Debug)]
+struct Pos {
+    x: f32,
+    y: f32,
+}
 struct GlParameters {
     rect_count_index: Option<WebGlUniformLocation>,
     canvas_w_index: Option<WebGlUniformLocation>,
@@ -385,17 +390,33 @@ impl GameState {
         self.context.use_program(self.background_program.as_ref());
         self.context.bind_vertex_array(self.background_vao.as_ref());
         gl_related::draw(&self.context, 6, true, 0);
+        match self.monkey.monkey_state {
+            MonkeyState::Running => {self.draw_running_monkey()}
+            MonkeyState::Climbing => {self.draw_climbing_monkey()}
+        }
+    }
+
+    fn draw_running_monkey(&self) -> Result<(), JsValue> {
         self.context.use_program(self.monkey_running_program.as_ref());
         self.context.bind_vertex_array(self.monkey_vao.as_ref());
         gl_related::draw(&self.context, 6, false, 0);
         Ok(())
     }
 
+    fn draw_climbing_monkey(&self) -> Result<(), JsValue> {
+        self.context.use_program(self.monkey_running_program.as_ref());
+        self.context.bind_vertex_array(self.monkey_vao.as_ref());
+        gl_related::draw(&self.context, 30, false, 0);
+        Ok(())
+    }
+
+    #[wasm_bindgen]
     pub fn onclick(&mut self, x_click: f32, y_click: f32) {
         for tree_struct in self.tree_structs.iter().rev() {
             match tree_struct.get_dest_on_click(x_click, y_click) {
                 Some(val) => {
                     self.monkey.set_tree_goal(tree_struct.tree_index, val);
+                    self.set_new_local_goal();
                     return;
                 }
                 None => {}
@@ -436,6 +457,7 @@ impl GameState {
         }
     }
 
+    #[wasm_bindgen]
     pub fn on_animation_frame(&mut self, deltat: f32) -> Result<(), JsValue> {
         match self.monkey.monkey_state {
             MonkeyState::Running => {
@@ -457,7 +479,8 @@ impl GameState {
             MonkeyState::Climbing => {
                 let tree_num = self.monkey.climbing_num;
                 let now_tree = &mut self.tree_structs[tree_num];
-                let v = self.monkey.running.parameters.v;
+                //let v = self.monkey.running.parameters.v;
+                let v = 45.0;
                 now_tree.monkey_on_animation_frame(deltat, v);
                 let now_tree = & self.tree_structs[tree_num];
                 if now_tree.monkey_climbing.on_goal {
@@ -485,13 +508,21 @@ impl GameState {
         }
         match self.monkey.monkey_state {
             MonkeyState::Running => {
-            gl_related::apply_arrays_monkey(&self.context,
-                &self.monkey.running.vertex_arr,
-                &self.monkey.running.texture_arr,
-                self.monkey_position_buffer.as_ref(),
-                self.monkey_tex_coord_buffer.as_ref());
+                gl_related::apply_arrays_monkey(&self.context,
+                    &self.monkey.running.vertex_arr,
+                    &self.monkey.running.texture_arr,
+                    self.monkey_position_buffer.as_ref(),
+                    self.monkey_tex_coord_buffer.as_ref());
             }
-            MonkeyState::Climbing => {}
+            MonkeyState::Climbing => {
+                let tree_num = self.monkey.climbing_num;
+                let monkey = &self.tree_structs[tree_num].monkey_climbing;
+                gl_related::apply_arrays_monkey(&self.context,
+                    &monkey.vertex_arr,
+                    &monkey.texture_arr,
+                    self.monkey_position_buffer.as_ref(),
+                    self.monkey_tex_coord_buffer.as_ref());
+            }
         }
         self.draw_monkey()?;
         Ok(())
