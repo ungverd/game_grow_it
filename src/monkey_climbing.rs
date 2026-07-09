@@ -559,7 +559,8 @@ impl crate::TreeStruct {
                 } else {
                     for current_segment_i in current_segment+1..tree.len() {
                         let current_segment_obj = tree.get(current_segment_i).unwrap();
-                        if dist_from_root >= current_segment_obj.dist_from_root_start {
+                        let dist_end = current_segment_obj.dist_from_root_start + current_segment_obj.length;
+                        if dist_from_root <= dist_end {
                             return get_limb_pos_x_y_segment_known(dist_from_root,
                                         current_segment_obj,
                                         is_left);
@@ -575,8 +576,7 @@ impl crate::TreeStruct {
             } else {
                 for current_segment_i in (0..current_segment).rev() {
                     let current_segment_obj = tree.get(current_segment_i).unwrap();
-                    let dist_end = current_segment_obj.dist_from_root_start + current_segment_obj.length;
-                    if dist_from_root <= dist_end {
+                    if dist_from_root >= current_segment_obj.dist_from_root_start {
                         return get_limb_pos_x_y_segment_known(dist_from_root,
                                     current_segment_obj,
                                     is_left);
