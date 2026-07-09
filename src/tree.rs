@@ -176,9 +176,9 @@ fn get_rect(w: f64, h: f64, segment: &Segment) -> Rect {
                 let val = ((pos % 4) + 4) % 4;
                 match val {
                     0 => points.push([center_x + this_radius, center_y]),
-                    1 => points.push([center_x, center_y - this_radius]),
+                    1 => points.push([center_x, center_y + this_radius]),
                     2 => points.push([center_x - this_radius, center_y]),
-                    3 => points.push([center_x, center_y + this_radius]),
+                    3 => points.push([center_x, center_y - this_radius]),
                     _ => panic!("val must be 0, 1, 2, or 3"),
                 }
                 counter += 1;
