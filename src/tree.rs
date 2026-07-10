@@ -43,7 +43,8 @@ struct Segment {
     angle_start: f64,
     left: bool,
     straight: bool,
-    is_with_zero_opposite: bool
+    is_with_zero_opposite: bool,
+    is_first: bool
 }
 
 /* brezenham-like selection of which leaf is in front of which in arc */
@@ -158,9 +159,18 @@ fn get_rect(w: f64, h: f64, segment: &Segment) -> Rect {
         points.push([pointx, pointy]);
     }
     if segment.straight == false {
-        let start_ceil = (segment.angle_start / (PI / 2f64)).ceil() as i32;
-        let end_ceil = (angle_end / (PI / 2f64)).ceil() as i32;
-        let (min_ceil, max_ceil) = if start_ceil > end_ceil {(end_ceil, start_ceil)} else {(start_ceil, end_ceil)};
+        let min_ceil;
+        let max_ceil;
+        if segment.radius > 0.0 {
+            min_ceil = (segment.angle_start / (PI / 2f64)).ceil() as i32;
+            max_ceil = (angle_end / (PI / 2f64)).ceil() as i32;
+        } else {
+            min_ceil = ((PI + angle_end)/ (PI / 2f64)).ceil() as i32;
+            max_ceil = ((PI + segment.angle_start)/ (PI / 2f64)).ceil() as i32;
+        }
+        //let start_ceil = (segment.angle_start / (PI / 2f64)).ceil() as i32;
+        //let end_ceil = (angle_end / (PI / 2f64)).ceil() as i32;
+        //let (min_ceil, max_ceil) = if start_ceil > end_ceil {(end_ceil, start_ceil)} else {(start_ceil, end_ceil)};
         if max_ceil - min_ceil > 0 {
             let mut counter = 0;
             let mut pos = min_ceil;
@@ -1119,6 +1129,7 @@ impl crate::TreeStruct {
             for _i in 0..item.repeats {
                 let mut counter_left = 0;
                 let mut counter_right = 0;
+                let mut is_first = true;
                 for el in &bres_seq {
 
                     let center_bottom_x_left_next;
@@ -1177,7 +1188,9 @@ impl crate::TreeStruct {
                                                         angle_start,
                                                         left,
                                                         straight,
-                                                        is_with_zero_opposite};
+                                                        is_with_zero_opposite,
+                                                        is_first};
+                    is_first = false; 
                     segments.push(leaf_segment);
                 }
                 if right == 0 {
@@ -1228,6 +1241,15 @@ impl crate::TreeStruct {
                     prev_left,
                     prev_right);
             let this_num = entities_num as i32;
+            let mut first_left = false;
+            let mut first_right = false;
+            if leaf_segment.is_first {
+                if leaf_segment.left {
+                    first_left = true;
+                } else {
+                    first_right = true;
+                }
+            }
             entities_num += 1;
             if entities_num >= crate::MAX_RECTS {
                 crate::alert("You reached the maximum plant size on this stahe. It's impressive! But now you need to restart");
@@ -1263,6 +1285,12 @@ impl crate::TreeStruct {
                 prev_left = this_num;
             } else {
                 prev_right = this_num;
+            }
+            if first_left {
+                prev_right = -1;
+            }
+            if first_right {
+                prev_left = -1;
             }
         }
         
