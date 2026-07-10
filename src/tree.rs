@@ -44,7 +44,8 @@ struct Segment {
     left: bool,
     straight: bool,
     is_with_zero_opposite: bool,
-    is_first: bool
+    is_first: bool,
+    has_prev_opposite: bool,
 }
 
 /* brezenham-like selection of which leaf is in front of which in arc */
@@ -1081,11 +1082,129 @@ impl crate::GameState {
     }
 }
 
+fn euler_alhorithm(a: u32, b: u32) -> u32 {
+    let mut aa = a;
+    let mut bb = b;
+    while aa != bb {
+        if aa > bb {aa = aa - bb;}
+        if bb > aa {bb = bb - aa;}
+    }
+    aa
+}
+
+fn make_most_repeated_tree_unit(unit: &crate::TreeUnit) -> crate::TreeUnit {
+    // make right and left mutually prime, like (4, 6, 2) -> (2, 3, 4)
+    // This is needed to correctly detect "first" leafs in each stack of repeated numbers
+    // (like each (2, 3, 1) is 5 segments, and second has previous right that is the first
+    // and NO previous left because first takes all width of the stem)
+    if unit.right == 0 && unit.left == 0 {
+        return crate::TreeUnit {
+            left: 0,
+            right: 0,
+            repeats: 0,
+        };
+    }
+    if unit.right == 0 {
+        return crate::TreeUnit {
+            left: 1,
+            right: 0,
+            repeats: unit.repeats * unit.left,
+        };
+    }
+    if unit.left == 0 {
+        return crate::TreeUnit {
+            left: 0,
+            right: 1,
+            repeats: unit.repeats * unit.right,
+        };
+    }
+    // both not zero, can apply euler algorithm
+    let factor = euler_alhorithm(unit.right, unit.left);
+    let left = unit.left / factor;
+    let right = unit.right / factor;
+    let repeats = unit.repeats * factor;
+    crate::TreeUnit {
+        left,
+        right,
+        repeats,
+    }
+}
+
+fn convert_stem(stem: &Vec<crate::TreeUnit>) -> Vec<crate::TreeUnit> {
+    let mut converted_vec: Vec<crate::TreeUnit> = vec![];
+    for el in stem {
+        converted_vec.push(make_most_repeated_tree_unit(el));
+    }
+    converted_vec
+}
+
+struct UnusedAngleManagement {
+    is_used: bool,
+    are_lefts_longer: bool,
+    delta_longs: f64,
+    delta_shorts: f64,
+    prev_angle_end: f64,
+    now_angle_start: f64
+
+}
+
+impl UnusedAngleManagement {
+    fn new(right: u32, left: u32) -> UnusedAngleManagement {
+        let are_lefts_longer = right > left;
+        let delta_longs;
+        let delta_shorts;
+        let is_used;
+        if right != 0 && left != 0 && right != left {
+            is_used = true;
+            if are_lefts_longer {
+                delta_longs = 1.0 / (left as f64);
+                delta_shorts = 1.0 / (right as f64);
+            } else {
+                delta_longs = 1.0 / (right as f64);
+                delta_shorts = 1.0 / (left as f64);
+            }
+        } else { // these values will not be used
+            is_used = false;
+            delta_longs = 0.0;
+            delta_shorts = 0.0;
+        }
+        UnusedAngleManagement {
+            is_used,
+            are_lefts_longer,
+            delta_longs,
+            delta_shorts,
+            prev_angle_end: 0.0,
+            now_angle_start: 0.0,
+        }
+    }
+
+    fn set_start(&mut self) {
+        self.prev_angle_end = 0.0;
+        self.now_angle_start = 0.0;
+    }
+
+    fn does_el_have_prev_opposite(&mut self, is_left: bool) -> bool {
+        if !self.is_used {
+            return true;
+        }
+        let is_long = is_left == self.are_lefts_longer;
+        if is_long {
+            self.prev_angle_end += self.delta_longs;
+            return true;
+        } else {
+            let angle_start = self.now_angle_start;
+            self.now_angle_start += self.delta_shorts;
+            return angle_start < self.prev_angle_end; // if less then this threshold angle,
+                                                      // has the opposite if this element
+        }
+    }
+}
+
 impl crate::TreeStruct {
     fn get_segments(&self, w: f64) -> Vec<Segment> {
-        let stem = &self.tree;
+        let converted_stem = convert_stem(&self.tree);
         let mut segments_capacity = 0;
-        for item in stem {
+        for item in &converted_stem {
             segments_capacity += item.right * item.repeats;
             segments_capacity += item.left * item.repeats;
         }
@@ -1094,7 +1213,7 @@ impl crate::TreeStruct {
         let mut center_bottom_y_global = self.y_start as f64;
         let mut angle = 0f64;
         let mut total_distance_from_root = 0f64;
-        for item in stem {
+        for item in &converted_stem {
             let right = item.right;
             let left = item.left;
             let f_right = right as f64;
@@ -1125,13 +1244,14 @@ impl crate::TreeStruct {
             let mut center_bottom_y_left = center_bottom_y_global;
             let mut center_bottom_x_right = center_bottom_x_global;
             let mut center_bottom_y_right = center_bottom_y_global;
-            let is_with_zero_opposite = right == 0 || left == 0; 
+            let is_with_zero_opposite = right == 0 || left == 0;
+            let mut unused_angle_manager = UnusedAngleManagement::new(right, left);
             for _i in 0..item.repeats {
+                unused_angle_manager.set_start();
                 let mut counter_left = 0;
                 let mut counter_right = 0;
                 let mut is_first = true;
                 for el in &bres_seq {
-
                     let center_bottom_x_left_next;
                     let center_bottom_y_left_next;
                     let center_bottom_x_right_next;
@@ -1181,6 +1301,7 @@ impl crate::TreeStruct {
                         center_bottom_x_right = center_bottom_x_right_next;
                         center_bottom_y_right = center_bottom_y_right_next;
                     }
+                    let has_prev_opposite = unused_angle_manager.does_el_have_prev_opposite(left);
                     let leaf_segment = Segment {center_bottom_x,
                                                         center_bottom_y,
                                                         distance_from_root,
@@ -1189,7 +1310,8 @@ impl crate::TreeStruct {
                                                         left,
                                                         straight,
                                                         is_with_zero_opposite,
-                                                        is_first};
+                                                        is_first,
+                                                        has_prev_opposite};
                     is_first = false; 
                     segments.push(leaf_segment);
                 }
@@ -1221,6 +1343,13 @@ impl crate::TreeStruct {
         //let drawing_params = &game_state.drawing_params;
         for segment_num in 0..segments.len() {
             let leaf_segment = &segments[segment_num];
+            if !leaf_segment.has_prev_opposite {
+                if leaf_segment.left {
+                    prev_right = -1;
+                } else{
+                    prev_left = -1;
+                }
+            }
             let rect = get_rect(drawing_params.w_common, drawing_params.h_top, leaf_segment);
             populate_leaf(&rect,
                     leaf_segment,
