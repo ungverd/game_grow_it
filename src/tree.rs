@@ -817,6 +817,11 @@ impl crate::GameState {
                         end = int(floor(converted_alpha1));
                     }}
                     if (end < start) return 10.0; // arbitrary big number
+                    if (beta > 0.0) {{
+                        start = end;
+                    }} else {{
+                        end = start;
+                    }}
                     for (int y_before_conversion=start; y_before_conversion<=end; y_before_conversion++) {{
                         float y_angle = float(y_before_conversion) * (2.0 * PI) + gamma;
                         float beta_rate = (y_angle - converted_angle_start) / beta;
@@ -1045,15 +1050,17 @@ impl crate::GameState {
                                         outColor = get_out_color(radius_index2, x_source, y_source);
                                     }}
                                 }}
-                                float prev_left = dist_from_root_beta_prevleft_prevright[i].z;
-                                float prev_right = dist_from_root_beta_prevleft_prevright[i].w;
-                                float shadow_index1 = get_shadow_ratio(prev_left, pos);
-                                if (shadow_index1 < 1.0) {{
-                                    outColor = get_shadow_color(shadow_index1);
-                                }}
-                                float shadow_index2 = get_shadow_ratio(prev_right, pos);
-                                if (shadow_index2 < 1.0) {{
-                                    outColor = get_shadow_color(shadow_index2);
+                                if ((beta > 0.0 && y_before_conversion == start) || (beta < 0.0 && y_before_conversion == end)) {{
+                                    float prev_left = dist_from_root_beta_prevleft_prevright[i].z;
+                                    float prev_right = dist_from_root_beta_prevleft_prevright[i].w;
+                                    float shadow_index1 = get_shadow_ratio(prev_left, pos);
+                                    if (shadow_index1 < 1.0) {{
+                                        outColor = get_shadow_color(shadow_index1);
+                                    }}
+                                    float shadow_index2 = get_shadow_ratio(prev_right, pos);
+                                    if (shadow_index2 < 1.0) {{
+                                        outColor = get_shadow_color(shadow_index2);
+                                    }}
                                 }}
                             }}
                         }}
