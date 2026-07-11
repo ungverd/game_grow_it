@@ -434,6 +434,7 @@ fn populate_leaf(rect: &Rect,
                  y_circle: f64,
                  prev_left: i32,
                  prev_right: i32) {
+    let is_first = segment.is_first;
     let straightleaf = ((segment.straight as i32) * 2 + (is_leaf as i32)) as f32;
     arr[0][entity_num * 4] = rect.x as f32;
     arr[0][entity_num * 4 + 1] = rect.y as f32;
@@ -469,7 +470,7 @@ fn populate_leaf(rect: &Rect,
         arr[1][entity_num * 4 + 1] = mat[0][1] as f32;
         arr[1][entity_num * 4 + 2] = mat[1][0] as f32;
         arr[1][entity_num * 4 + 3] = mat[1][1] as f32;
-
+        arr[2][entity_num * 4 + 1] = if is_first {2.0} else {1.0};
         arr[2][entity_num * 4 + 2] = x_to_plus as f32;
         arr[2][entity_num * 4 + 3] = y_to_plus as f32;
     } else {
@@ -507,11 +508,15 @@ fn populate_leaf(rect: &Rect,
         } else {
             conv_angle_start = segment.angle_start + PI;
         }
+        let pre_first = if is_first {2.0} else {1.0};
+        let left = if segment.left {pre_first} else {-pre_first};
+        // this field is for dual use: if left > 0.5, segment is left,
+        // and if left*left > 2, the segment is first in group 
         arr[1][entity_num * 4] = center_x as f32;
         arr[1][entity_num * 4 + 1] = center_y as f32;
         arr[1][entity_num * 4 + 2] = bound_min as f32;
         arr[1][entity_num * 4 + 3] = bound_max as f32;
-        arr[2][entity_num * 4 + 1] = if segment.left { 1.0 } else { 0.0 };
+        arr[2][entity_num * 4 + 1] = left;
         arr[2][entity_num * 4 + 2] = segment.radius as f32;
         arr[2][entity_num * 4 + 3] = conv_angle_start as f32;
         arr[3][entity_num * 4 + 1] = beta as f32;
@@ -648,7 +653,14 @@ impl crate::GameState {
                 vec4 center_x_y_bound_min_max_mat[MAX_RECTS];
             }};
             layout(std140) uniform Straightleaf_left_radius_convastart_x_y_to_plus {{
-                vec4 straightleaf_left_radius_convastart_x_y_to_plus[MAX_RECTS]; // if straight, left (y) is not used
+                vec4 straightleaf_left_radius_convastart_x_y_to_plus[MAX_RECTS];
+                // left (y) has dual use: it can be -2, -1, 1 and 2
+                // if it's > 0.5, this segment is left (useful for not straight segments)
+                // if its square is > 2 (-2 and 2), it's first segment in group.
+                // Sorry for you, reader, for this ugly trick,
+                // I needed to add information is the segment first to fix some rare visual bug,
+                // and I did it quickly and without changing existing code
+                // because I was to lazy for refactoring
             }};
             layout(std140) uniform Dist_from_root_beta_prevleft_prevright {{
                 vec4 dist_from_root_beta_prevleft_prevright[MAX_RECTS];
@@ -817,23 +829,22 @@ impl crate::GameState {
                         end = int(floor(converted_alpha1));
                     }}
                     if (end < start) return 10.0; // arbitrary big number
+                    int y_before_conversion;
                     if (beta > 0.0) {{
-                        start = end;
+                        y_before_conversion = end;
                     }} else {{
-                        end = start;
+                        y_before_conversion = start;
                     }}
-                    for (int y_before_conversion=start; y_before_conversion<=end; y_before_conversion++) {{
-                        float y_angle = float(y_before_conversion) * (2.0 * PI) + gamma;
-                        float beta_rate = (y_angle - converted_angle_start) / beta;
-                        float height_this_point_source = source_h * beta_rate;
-                        float y_source = source_y0 + height_this_point_source;
-                        
-                        float deltay_source = y_source - y_circle;
-                        float x_intersect = x_circle - sqrt(radius_circle*radius_circle -
-                                                            deltay_source*deltay_source);
-                        float radius_index = abs(x_source - x_intersect) / (shadow_width * SCALING);
-                        if (radius_index < 1.0) return radius_index;
-                    }}
+                    float y_angle = float(y_before_conversion) * (2.0 * PI) + gamma;
+                    float beta_rate = (y_angle - converted_angle_start) / beta;
+                    float height_this_point_source = source_h * beta_rate;
+                    float y_source = source_y0 + height_this_point_source;
+                    
+                    float deltay_source = y_source - y_circle;
+                    float x_intersect = x_circle - sqrt(radius_circle*radius_circle -
+                                                        deltay_source*deltay_source);
+                    float radius_index = abs(x_source - x_intersect) / (shadow_width * SCALING);
+                    if (radius_index < 1.0) return radius_index;
                 }} else {{
                     float radius_index1 = get_radius_index_smoothstep(i, pos, 0u, shadow_width);
                     if (radius_index1 < 1.0) return radius_index1;
@@ -845,7 +856,7 @@ impl crate::GameState {
                 return 10.0; // arbitrary number > 1
             }}
 
-            float get_shadow_ratio(float prev_i, vec2 pos) {{
+            float get_shadow_ratio(float prev_i, vec2 pos, uint actual_i) {{
                 if (prev_i < 0.0) return 10.0; // arbitrary big number
                 uint i = uint(round(prev_i));
                 bool is_straight;
@@ -893,6 +904,30 @@ impl crate::GameState {
                     float radius_index = abs(now_radius - radius_circle) / (shadow_width * SCALING);
                     return radius_index;
                 }} else {{
+                    float is_first = straightleaf_left_radius_convastart_x_y_to_plus[actual_i].y;
+                    // 2.0 or -2.0 if first, 1.0 or -1.0 otherwise
+                    is_first = is_first * is_first;
+                    if (is_first > 2.0) {{
+                        float actual_straight_leaf = straightleaf_left_radius_convastart_x_y_to_plus[actual_i].x;
+                        bool actual_is_leaf;
+                        if (actual_straight_leaf < 0.5) {{
+                            actual_is_leaf = false;
+                        }} else {{
+                            if (actual_straight_leaf < 1.5) {{
+                                actual_is_leaf = true;
+                            }} else {{
+                                if (actual_straight_leaf < 2.5) {{
+                                    actual_is_leaf = false;
+                                }} else {{
+                                    actual_is_leaf = true;
+                                }}
+                            }}
+                        }}
+                        if (actual_is_leaf) {{
+                            float prev_beta = dist_from_root_beta_prevleft_prevright[i].y;
+                            if (abs(prev_beta) > ABS_BETA_LIMIT - 0.0001) return 10.0; // we don't draw on first leaf in "long spiral" case
+                        }} 
+                    }}
                     float radius_index = get_shadow_ratio_curled(i, pos, source_h, source_y0);
                     return radius_index;
                 }}
@@ -967,11 +1002,11 @@ impl crate::GameState {
                             outColor = get_out_color(radius_index, x_source, y_source);
                             float prev_left = dist_from_root_beta_prevleft_prevright[i].z;
                             float prev_right = dist_from_root_beta_prevleft_prevright[i].w;
-                            float shadow_index1 = get_shadow_ratio(prev_left, pos);
+                            float shadow_index1 = get_shadow_ratio(prev_left, pos, i);
                             if (shadow_index1 < 1.0) {{
                                 outColor = get_shadow_color(shadow_index1);
                             }}
-                            float shadow_index2 = get_shadow_ratio(prev_right, pos);
+                            float shadow_index2 = get_shadow_ratio(prev_right, pos, i);
                             if (shadow_index2 < 1.0) {{
                                 outColor = get_shadow_color(shadow_index2);
                             }}
@@ -1053,11 +1088,11 @@ impl crate::GameState {
                                 if ((beta > 0.0 && y_before_conversion == start) || (beta < 0.0 && y_before_conversion == end)) {{
                                     float prev_left = dist_from_root_beta_prevleft_prevright[i].z;
                                     float prev_right = dist_from_root_beta_prevleft_prevright[i].w;
-                                    float shadow_index1 = get_shadow_ratio(prev_left, pos);
+                                    float shadow_index1 = get_shadow_ratio(prev_left, pos, i);
                                     if (shadow_index1 < 1.0) {{
                                         outColor = get_shadow_color(shadow_index1);
                                     }}
-                                    float shadow_index2 = get_shadow_ratio(prev_right, pos);
+                                    float shadow_index2 = get_shadow_ratio(prev_right, pos, i);
                                     if (shadow_index2 < 1.0) {{
                                         outColor = get_shadow_color(shadow_index2);
                                     }}
