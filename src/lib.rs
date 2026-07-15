@@ -417,7 +417,6 @@ impl GameState {
         self.context.use_program(self.monkey_climbing_program.as_ref());
         self.context.bind_vertex_array(self.monkey_vao.as_ref());
         let height = self.tree_structs[self.monkey.climbing_num].get_monkey_height();
-        crate::log(&format!("g {:?}", height));
         self.context.uniform1f(self.height_index.as_ref(), height);
         gl_related::draw(&self.context, 30, false, 0);
         Ok(())
