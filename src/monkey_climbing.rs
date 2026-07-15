@@ -22,7 +22,7 @@ impl crate::Pos {
 }
 
 pub struct MonkeyClimbing {
-    total_height: f32,
+    pub total_height: f32,
     now_segment: usize,
     body_pos: crate::Pos,
     left_arm_right_arm_left_leg_right_leg: [crate::Pos; 4],
@@ -204,6 +204,14 @@ impl crate::TreeStruct {
     pub fn set_monkey_height(&mut self, height: f32) {
         self.monkey_climbing.total_height = height;
         self.update_monkey_based_on_height();
+    }
+
+    pub fn get_monkey_height(&self) -> f32 {
+        let h0 = self.monkey_climbing.total_height;
+        let h_head = h0 + DELTAY_FRONT + 5.0;
+        let monkey_segment = self.monkey_climbing.now_segment;
+        let h_arm = h0 + self.tree_for_climbing[monkey_segment].arm_dist;
+        if h_head > h_arm {h_head} else {h_arm}
     }
 }
 

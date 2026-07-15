@@ -679,7 +679,8 @@ impl crate::GameState {
             uniform uint rectCount;
             uniform sampler2D u_image;
             
-            out vec4 outColor;
+            layout(location = 0) out vec4 outColor;
+            layout(location = 1) out vec4 outa;
 
             float get_dist_from_root(float x_source,
                                     float y_source,
@@ -933,6 +934,26 @@ impl crate::GameState {
                 }}
             }}
 
+
+            vec4 a_to_outa(float a) {{
+                float a_converted = round(a * 10.0);
+                if (a_converted < 0.0) {{
+                    a_converted = 0.0;
+                }}
+                float d1 = mod(a_converted, 256.0);
+                a_converted = (a_converted - d1) / 256.0; 
+                float d2 = mod(a_converted, 256.0);
+                a_converted = (a_converted - d2) / 256.0; 
+                float d3 = mod(a_converted, 256.0);
+                a_converted = (a_converted - d3) / 256.0; 
+                float d4 = mod(a_converted, 256.0);
+                float a1 = d1 / 255.0;
+                float a2 = d2 / 255.0;
+                float a3 = d3 / 255.0;
+                float a4 = d4 / 255.0;
+                return vec4(a1, a2, a3, a4);
+            }}
+
             void main() {{
                 float a = - MIN_A_DIF * 2.0;
                 vec2 pos = screen_coord;
@@ -1101,6 +1122,7 @@ impl crate::GameState {
                         }}
                     }}
                 }}
+                outa = a_to_outa(a);
             }}
             "##, crate::MAX_RECTS,
                 scaling,

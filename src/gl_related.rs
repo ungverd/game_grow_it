@@ -13,6 +13,8 @@ pub fn get_context_and_canvas_width() -> Result<(WebGl2RenderingContext, f32), J
         .get_context("webgl2")?
         .unwrap()
         .dyn_into::<WebGl2RenderingContext>()?;
+    //let result = context.get_extension("WEBGL_draw_buffers");
+    //crate::log(&format!("result{:?}", result));
     Ok((context, canvas_width))
 }
 
@@ -233,6 +235,63 @@ pub fn prepare_gl(img: web_sys::HtmlImageElement,
                                  Some(&texture_to_buffer),
                                  level);
 
+    // texture with a (f32)
+    let texture_to_buffer2 = context.create_texture().expect("Cannot create gl texture");
+    let level = 0;
+    //let internal_format = WebGl2RenderingContext::R32F;
+    //let src_format = WebGl2RenderingContext::RED;
+    //let src_type = WebGl2RenderingContext::FLOAT;
+
+    context.active_texture(WebGl2RenderingContext::TEXTURE2);
+    context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&texture_to_buffer2));
+    context.tex_parameteri(
+        WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_WRAP_S,
+        WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+    );
+    context.tex_parameteri(
+        WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_WRAP_T,
+        WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+    );
+    context.tex_parameteri(
+        WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+        WebGl2RenderingContext::NEAREST as i32,
+    );
+    context.tex_parameteri(
+        WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+        WebGl2RenderingContext::NEAREST as i32,
+    );
+    let err = context.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+                WebGl2RenderingContext::TEXTURE_2D,
+                level,
+                internal_format as i32,
+                TARGET_TEXTURE_WIDTH,
+                TARGET_TEXTURE_HEIGHT,
+                0,
+                src_format,
+                src_type,
+                None
+            );
+    match err {
+    Ok(()) => (),
+    Err(val) => {return Err(val)}
+    };
+ 
+    // attach the texture as the color attachment
+    let attachment_point1 = WebGl2RenderingContext::COLOR_ATTACHMENT1;
+    context.framebuffer_texture_2d(WebGl2RenderingContext::FRAMEBUFFER,
+                                 attachment_point1,
+                                 WebGl2RenderingContext::TEXTURE_2D,
+                                 Some(&texture_to_buffer2),
+                                 level);
+    let arr_js = js_sys::Array::new_with_length(2);
+    arr_js.set(0, JsValue::from_f64(WebGl2RenderingContext::COLOR_ATTACHMENT0 as f64));
+    arr_js.set(1, JsValue::from_f64(WebGl2RenderingContext::COLOR_ATTACHMENT1 as f64));
+    context.draw_buffers(&arr_js);
+    context.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
     Ok((rect_count_index, canvas_w_index, program, vao, fb))
 
 }
@@ -393,7 +452,9 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
                       monkey_texture_array: &[f32],) -> Result<(WebGlProgram,
                                                                 WebGlVertexArrayObject,
                                                                 WebGlBuffer,
-                                                                WebGlBuffer,), JsValue> {
+                                                                WebGlBuffer,
+                                                                WebGlProgram,
+                                                                Option<WebGlUniformLocation>), JsValue> {
     let vert_shader = compile_shader(
         &context,
         WebGl2RenderingContext::VERTEX_SHADER,
@@ -515,7 +576,7 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     let src_format = WebGl2RenderingContext::RED;
     let src_type = WebGl2RenderingContext::UNSIGNED_BYTE;
 
-    context.active_texture(WebGl2RenderingContext::TEXTURE2);
+    context.active_texture(WebGl2RenderingContext::TEXTURE3);
     context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&texture));
     context.tex_parameteri(
         WebGl2RenderingContext::TEXTURE_2D,
@@ -551,8 +612,75 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     Err(val) => {return Err(val)}
     };
     let monkey_texture_index = context.get_uniform_location(&program, "monkey_image");
-    context.uniform1i(monkey_texture_index.as_ref(), 2);
-    Ok((program, vao, positions_buffer, tex_coord_buffer))
+    context.uniform1i(monkey_texture_index.as_ref(), 3);
+
+    let vert_shader_climbing = compile_shader(
+        &context,
+        WebGl2RenderingContext::VERTEX_SHADER,
+        r##"#version 300 es
+ 
+        in vec4 position;
+        in vec2 a_texCoord;
+        out vec2 v_texCoord;
+        out vec2 v_screenPosition;
+
+        void main() {
+            gl_Position = position;
+            v_screenPosition = (position.xy * 0.5) + vec2(0.5, 0.5);
+            v_texCoord = a_texCoord;
+        }
+        "##,
+    )?;
+    let frag_shader_climbing = compile_shader(
+        &context,
+        WebGl2RenderingContext::FRAGMENT_SHADER,
+        r##"#version 300 es
+    
+        precision mediump float;
+        uniform sampler2D monkey_image;
+        uniform sampler2D background_image;
+        uniform sampler2D ina;
+        uniform float heightOnTree;
+        
+        in vec2 v_texCoord;
+        in vec2 v_screenPosition;
+        out vec4 outColor;
+
+        float outa_to_a(vec4 outa) {
+            float d1 = round(outa.x * 255.0);
+            float d2 = round(outa.y * 255.0);
+            float d3 = round(outa.z * 255.0);
+            float d4 = round(outa.w * 255.0);
+            float m = 256.0;
+            float a_before = d1 + d2 * m + d3 * m * m + d4 * m * m * m;
+            float a = a_before / 10.0;
+            return a;
+        }
+        
+        void main() {
+            if (texture(monkey_image, v_texCoord).x > 0.5) {
+                float a = outa_to_a(texture(ina, v_screenPosition));
+                if (a < heightOnTree) { 
+                    outColor = vec4(0.0, 0.0, 0.0, 1.0);
+                } else {
+                    outColor = vec4(0.0, 0.3, 0.0, 0.3) + 0.7 * texture(background_image, v_screenPosition);
+                }
+            } else {
+                discard;
+            }
+        }"##,
+    )?;
+    let program_climbing = link_program(&context, &vert_shader_climbing, &frag_shader_climbing)?;
+    context.use_program(Some(&program_climbing));
+    
+    let background_texture_index = context.get_uniform_location(&program_climbing, "background_image");
+    context.uniform1i(background_texture_index.as_ref(), 1);
+    let ina_texture_index = context.get_uniform_location(&program_climbing, "ina");
+    context.uniform1i(ina_texture_index.as_ref(), 2);
+    let monkey_texture_index = context.get_uniform_location(&program_climbing, "monkey_image");
+    context.uniform1i(monkey_texture_index.as_ref(), 3);
+    let height_on_tree_index = context.get_uniform_location(&program_climbing, "heightOnTree");
+    Ok((program, vao, positions_buffer, tex_coord_buffer, program_climbing, height_on_tree_index))
 }
 
 pub fn prepare_to_draw_background(context: &WebGl2RenderingContext) -> Result<(WebGlProgram,
@@ -670,7 +798,7 @@ pub fn prepare_to_draw_background(context: &WebGl2RenderingContext) -> Result<(W
         0,
     );
     context.enable_vertex_attrib_array(tex_coord_attribute_location as u32);
-    let leaf_texture_index = context.get_uniform_location(&program, "background_image");
-    context.uniform1i(leaf_texture_index.as_ref(), 1);
+    let background_texture_index = context.get_uniform_location(&program, "background_image");
+    context.uniform1i(background_texture_index.as_ref(), 1);
     Ok((program, vao))
 }

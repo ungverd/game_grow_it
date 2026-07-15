@@ -191,6 +191,8 @@ pub struct GameState {
     background_vao: Option<WebGlVertexArrayObject>,
     straight_up_dist: f32,
     straight_down_dist: f32,
+    monkey_climbing_program: Option<WebGlProgram>,
+    height_index:Option<WebGlUniformLocation>
 }
 
 #[wasm_bindgen]
@@ -234,6 +236,7 @@ impl GameState {
         };
         let tree_struct = TreeStruct::new(START_X, START_Y, 0);
         let tree_structs: Vec<TreeStruct> = vec![tree_struct];
+
         Ok(GameState {
             tree_structs,
             monkey,
@@ -253,6 +256,9 @@ impl GameState {
             background_vao: None,
             straight_up_dist,
             straight_down_dist,
+            monkey_climbing_program: None,
+            height_index: None
+
         })
     }
 
@@ -334,7 +340,9 @@ impl GameState {
         let (monkey_running_program,
             monkey_vao,
             monkey_position_buffer,
-            monkey_tex_coords_buffer) = gl_related::prepare_monkey(img_monkey,
+            monkey_tex_coords_buffer,
+            monkey_climbing_program,
+            height_index) = gl_related::prepare_monkey(img_monkey,
                                                                              &self.context,
                                                                              &self.monkey.running.vertex_arr,
                                                                              &self.monkey.running.texture_arr)?;
@@ -346,6 +354,8 @@ impl GameState {
              background_vao) = gl_related::prepare_to_draw_background(&self.context)?;
         self.background_program = Some(background_program);
         self.background_vao = Some(background_vao);
+        self.monkey_climbing_program = Some(monkey_climbing_program);
+        self.height_index = height_index;
         self.draw_tree()?;
         Ok(())
     }
@@ -404,8 +414,11 @@ impl GameState {
     }
 
     fn draw_climbing_monkey(&self) -> Result<(), JsValue> {
-        self.context.use_program(self.monkey_running_program.as_ref());
+        self.context.use_program(self.monkey_climbing_program.as_ref());
         self.context.bind_vertex_array(self.monkey_vao.as_ref());
+        let height = self.tree_structs[self.monkey.climbing_num].get_monkey_height();
+        crate::log(&format!("g {:?}", height));
+        self.context.uniform1f(self.height_index.as_ref(), height);
         gl_related::draw(&self.context, 30, false, 0);
         Ok(())
     }
