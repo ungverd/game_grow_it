@@ -710,18 +710,12 @@ impl crate::TreeStruct {
 }
 
 fn get_points_original(row: usize, col: usize) -> (f32, f32, f32, f32) {
-    //crate::log(&format!("row {:?} col {:?}", row, col));
     let p0x = IMAGE_SIDE - (TAIL_COLUMNS as f32) * TAIL_FRAMEWIDTH;
     let p0y = 0.0;
     let o1x = p0x + TAIL_FRAMEWIDTH * (col as f32);
     let o2x = p0x + TAIL_FRAMEWIDTH * ((col + 1) as f32);
     let o1y = p0y + TAIL_FRAMEHEIGHT * (row as f32);
     let o2y = p0y + TAIL_FRAMEHEIGHT * ((row + 1) as f32);
-    crate::log(&format!("o1x {:?} o1y {:?} o2x {:?} o2y {:?}", o1x, o1y, o2x, o2y));
-    /*let o1x = 261.0;
-    let o1y = 261.0;
-    let o2x = 261.0;
-    let o2y = 261.0;*/
     (o1x, o2x, o1y, o2y)
 }
 

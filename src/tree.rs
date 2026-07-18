@@ -416,6 +416,18 @@ fn smoothstep_border_algorithm(segment: &Segment,
     }
 }
 
+impl Segment {
+    fn get_beta(&self, source_h: f64, scaling: f64) -> f64 {
+        let beta;
+        if self.left {
+            beta = (source_h / scaling) / (self.radius - SEMI_W);
+        } else {
+            beta = (source_h / scaling) / (self.radius + SEMI_W);
+        }
+        return beta
+    }
+}
+
 fn populate_leaf(rect: &Rect,
                  segment: &Segment,
                  source_w: f64,
@@ -474,12 +486,7 @@ fn populate_leaf(rect: &Rect,
         arr[2][entity_num * 4 + 2] = x_to_plus as f32;
         arr[2][entity_num * 4 + 3] = y_to_plus as f32;
     } else {
-        let beta;
-        if segment.left {
-            beta = (source_h / scaling) / (segment.radius - SEMI_W);
-        } else {
-            beta = (source_h / scaling) / (segment.radius + SEMI_W);
-        }
+        let beta = segment.get_beta(source_h, scaling);
         let center_x = segment.center_bottom_x - segment.radius * segment.angle_start.cos();
         let center_y = segment.center_bottom_y - segment.radius * segment.angle_start.sin();
         let bound_min;
@@ -1248,6 +1255,7 @@ impl UnusedAngleManagement {
     }
 
     fn does_el_have_prev_opposite(&mut self, is_left: bool) -> bool {
+        //return true;
         if !self.is_used {
             return true;
         }
@@ -1404,14 +1412,24 @@ impl crate::TreeStruct {
         let mut entities_num = 0;
         let mut prev_left = -1;
         let mut prev_right = -1;
+        let mut prev_left_long = false;
+        let mut prev_right_long = false;
         //let drawing_params = &game_state.drawing_params;
         for segment_num in 0..segments.len() {
             let leaf_segment = &segments[segment_num];
+            let now_long = (!leaf_segment.straight) && leaf_segment.get_beta(
+                drawing_params.leaf_h,
+                drawing_params.scaling
+              ).abs() >= PI;
             if !leaf_segment.has_prev_opposite {
                 if leaf_segment.left {
-                    prev_right = -1;
+                    if now_long || prev_right_long {
+                        prev_right = -1;
+                    }
                 } else{
-                    prev_left = -1;
+                   if now_long || prev_left_long {
+                        prev_left = -1;
+                    }
                 }
             }
             let rect = get_rect(drawing_params.w_common, drawing_params.h_top, leaf_segment);
@@ -1476,8 +1494,10 @@ impl crate::TreeStruct {
             }
             if leaf_segment.left {
                 prev_left = this_num;
+                prev_left_long = now_long;
             } else {
                 prev_right = this_num;
+                prev_right_long = now_long;
             }
             if first_left {
                 prev_right = -1;
