@@ -10,6 +10,7 @@ pub const MAX_RECTS: usize = 1024;
 pub const BUF_LENGTH: usize = MAX_RECTS * 4;
 pub const NUM_UNIFORM_ARRAYS: usize = 7;
 pub const CANVAS_REF_WIDTH: f32 = 600.0;
+pub const CANVAS_REF_HEIGHT: f32 = 600.0;
 pub const UBOS_NAMES: [&'static str; 7] = ["Position_size",
                                        "Center_x_y_bound_min_max_mat",
                                        "Straightleaf_left_radius_convastart_x_y_to_plus",
@@ -21,6 +22,7 @@ pub const DEST_REF: i32 = 26; // width of tree in pixels
 
 pub const START_X: f32 = 300.0;
 pub const START_Y: f32 = 1.0; // coordinates where three starts
+pub const MONKEY_SCALING: f32 = 0.7; // 0.5 - monkey will be drawn smaller
 
 #[wasm_bindgen]
 extern "C" {
@@ -416,9 +418,11 @@ impl GameState {
     fn draw_climbing_monkey(&self) -> Result<(), JsValue> {
         self.context.use_program(self.monkey_climbing_program.as_ref());
         self.context.bind_vertex_array(self.monkey_vao.as_ref());
-        let height = self.tree_structs[self.monkey.climbing_num].get_monkey_height();
+        let tree_struct = &self.tree_structs[self.monkey.climbing_num];
+        let height = tree_struct.get_monkey_max_height();
+        let vert_count = tree_struct.monkey_climbing.vertex_arr.len() as i32 / 2;
         self.context.uniform1f(self.height_index.as_ref(), height);
-        gl_related::draw(&self.context, 30, false, 0);
+        gl_related::draw(&self.context, vert_count, false, 0);
         Ok(())
     }
 
@@ -528,6 +532,8 @@ impl GameState {
             }
             MonkeyState::Climbing => {
                 let tree_num = self.monkey.climbing_num;
+                let now_tree = &mut self.tree_structs[tree_num];
+                now_tree.update_tail(deltat);
                 let monkey = &self.tree_structs[tree_num].monkey_climbing;
                 gl_related::apply_arrays_monkey(&self.context,
                     &monkey.vertex_arr,

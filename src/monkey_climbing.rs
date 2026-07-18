@@ -4,15 +4,34 @@ use crate::START_X;
 
 pub const DELTAX_FRONT: f32 = 3.0; //px
 pub const DELTAX_BACK: f32 = 3.0; //px
-pub const DELTAY_FRONT: f32 = 11.0; //px
-pub const DELTAY_BACK: f32 = 11.0; //px
+pub const DELTAY_FRONT: f32 = 9.0; //px
+pub const DELTAY_BACK: f32 = 9.0; //px
 pub const LEG_SEGMENT_LENGTH: f32 = 10.0; //px
 pub const ARM_SEGMENT_LENGTH: f32 = 9.0; //px
+pub const ARM_WIDTH_START: f32 = 4.0; //px
+pub const ARM_WIDTH_MID: f32 = 3.0; //px
+pub const ARM_WIDTH_END: f32 = 2.0; //px
+pub const LEG_WIDTH_START: f32 = 5.0; //px
+pub const LEG_WIDTH_MID: f32 = 3.25; //px
+pub const LEG_WIDTH_END: f32 = 2.5; //px
 pub const MIN_DIST_FROM_ROOT: f32 = 5.0; //px, must be less then W * PI / 6 / 2
+const TAIL_PERIOD: f32 = 2.0; //seconds
+const TAIL_ROWS: usize = 10;
+const TAIL_COLUMNS: usize = 3;
+const TAIL_FRAMES: usize = (TAIL_ROWS * TAIL_COLUMNS) * 4 - 4;
+const TAIL_FULLEN: f32 = 40.0; //px
+const TAIL_DELTAY: f32 = 5.0; //px
+const TAIL_FRAMEWIDTH: f32 = 20.0; //px
+const TAIL_FRAMEHEIGHT: f32 = 48.0; //px
+const TAIL_DELTAX_START: f32 = 6.0; //px
+const TAIL_X_CENTER: f32 = TAIL_FRAMEWIDTH / 2.0; //px
+const TAIL_DELTAY_BOTTOM: f32 = TAIL_FRAMEHEIGHT - TAIL_FULLEN - TAIL_DELTAY;
+const IMAGE_SIDE: f32 = 1024.0; //px
+
 const PI: f32 = std::f32::consts::PI;
 pub const W: f32 = crate::DEST_REF as f32; // three width in px
 const CLIMBING_SPEED: f32 = 50.0; // px/s
-pub const LEG_EXTENSION_COEFFICIENT: f32 = 1.9; // must be lightly under 2, bigger -> leg more straight
+pub const LEG_EXTENSION_COEFFICIENT: f32 = 1.95; // must be lightly under 2, bigger -> leg more straight
 const STEP_RATIO: f32 = 2.0; // max distance between arm and leg is 2 times larger than min distance
 
 impl crate::Pos {
@@ -28,8 +47,9 @@ pub struct MonkeyClimbing {
     left_arm_right_arm_left_leg_right_leg: [crate::Pos; 4],
     goal_height: f32,
     pub on_goal: bool,
-    pub vertex_arr: [f32; 60],
-    pub texture_arr: [f32; 60]
+    pub vertex_arr: [f32; 168],
+    pub texture_arr: [f32; 168],
+    pub tail_time: f32,
 }
 
 struct TreeElForClimbingNotLinear {
@@ -206,7 +226,7 @@ impl crate::TreeStruct {
         self.update_monkey_based_on_height();
     }
 
-    pub fn get_monkey_height(&self) -> f32 {
+    pub fn get_monkey_max_height(&self) -> f32 {
         let h0 = self.monkey_climbing.total_height;
         let h_head = h0 + DELTAY_FRONT + 5.0;
         let monkey_segment = self.monkey_climbing.now_segment;
@@ -289,9 +309,9 @@ impl crate::TreeStruct {
         }
         let res_segment;
         let mut actual_dist_from_root = dist_from_root;
-        if dist_from_root < MIN_DIST_FROM_ROOT {
+        if dist_from_root < 0.0 {
             res_segment = tree.first().unwrap();
-            actual_dist_from_root = MIN_DIST_FROM_ROOT;
+            actual_dist_from_root = 0.0;
             segment_num = 0;
         } else {
             let segment_num_or_none = self.get_segment(actual_dist_from_root, segment_num);
@@ -321,8 +341,9 @@ impl MonkeyClimbing {
             left_arm_right_arm_left_leg_right_leg: [crate::Pos::new(), crate::Pos::new(), crate::Pos::new(), crate::Pos::new()],
             goal_height: 0.0,
             on_goal: false,
-            vertex_arr: [0.0; 60],
-            texture_arr: [261.0 / 1024.0; 60],
+            vertex_arr: [0.0; 168],
+            texture_arr: [261.0 / 1024.0; 168],
+            tail_time: 0.0,
         }
     }
     pub fn set_goal(&mut self, goal: f32) {
@@ -330,34 +351,26 @@ impl MonkeyClimbing {
         self.on_goal = false;
     }
 
-    pub fn refresh_arrays_climbing(&mut self) {
-
-        let mut vertex_vec: Vec<f32> = vec![];
-        for limb in &self.left_arm_right_arm_left_leg_right_leg {
-            let x_left = (limb.x - 2.0) * 2.0 / 600.0 - 1.0;
-            let x_right = (limb.x + 2.0) * 2.0 / 600.0 - 1.0;
-            let y_top = (limb.y + 2.0) * 2.0 / 600.0 - 1.0;
-            let y_bottom = (limb.y - 2.0) * 2.0 / 600.0 - 1.0; 
-            let arr = [x_left,  y_bottom,
-                           x_right, y_bottom,
-                           x_left,  y_top,
-                           x_right, y_bottom,
-                           x_right, y_top,
-                           x_left,  y_top,];
-            vertex_vec.extend(arr.iter());
+    pub fn convert_vert_arr_to_screen_coords(&mut self, start: usize, stop: usize) {
+        for i in start / 2 .. stop / 2 {
+            self.vertex_arr[2 * i] = self.vertex_arr[2 * i] * 2.0 / crate::CANVAS_REF_WIDTH - 1.0;
+            self.vertex_arr[2 * i + 1] = self.vertex_arr[2 * i + 1] * 2.0 / crate::CANVAS_REF_HEIGHT - 1.0;
         }
-        let x_left = (self.body_pos.x - 2.0) * 2.0 / 600.0 - 1.0; 
-        let x_right = (self.body_pos.x + 2.0) * 2.0 / 600.0 - 1.0; 
-        let y_top = (self.body_pos.y + 2.0) * 2.0 / 600.0 - 1.0; 
-        let y_bottom = (self.body_pos.y - 2.0) * 2.0 / 600.0 - 1.0; 
+    }
+
+    pub fn refresh_arrays_climbing(&mut self) {
+        let x_left = self.body_pos.x - 2.0; 
+        let x_right = self.body_pos.x + 2.0; 
+        let y_top = self.body_pos.y + 2.0; 
+        let y_bottom = self.body_pos.y - 2.0; 
         let arr = [x_left,  y_bottom,
                         x_right, y_bottom,
                         x_left,  y_top,
                         x_right, y_bottom,
                         x_right, y_top,
                         x_left,  y_top,];
-        vertex_vec.extend(arr.iter());
-        self.vertex_arr = vertex_vec.try_into().unwrap();
+        self.vertex_arr[144..156].copy_from_slice(&arr);
+        self.convert_vert_arr_to_screen_coords(0, 156);
     }
 }
 
@@ -394,13 +407,21 @@ impl crate::TreeStruct {
         let dist_from_root = self.monkey_climbing.total_height;
         let segment_num = self.monkey_climbing.now_segment;
         let (actual_segment_num,
+             _x,
+             _y,
+             actual_dist_from_root) = self.get_segment_x_y_dist_from_root_body(dist_from_root, segment_num);
+        let adjusted_dist_from_root = if actual_dist_from_root < MIN_DIST_FROM_ROOT {MIN_DIST_FROM_ROOT} else {actual_dist_from_root};
+        // I moved this adjustement that distance must be greater then MIN_DIST_FROM_ROOT
+        // because this get_segment_x_y function has other uses  
+        let (final_actual_segment_num,
              x,
              y,
-             actual_dist_from_root) = self.get_segment_x_y_dist_from_root_body(dist_from_root, segment_num);
-        self.monkey_climbing.total_height = actual_dist_from_root;
+             _actual_dist_from_root) = self.get_segment_x_y_dist_from_root_body(adjusted_dist_from_root, actual_segment_num);
+        self.monkey_climbing.total_height = adjusted_dist_from_root;
+        
         let body_pos = crate::Pos{x, y};
         self.monkey_climbing.body_pos = body_pos;
-        self.monkey_climbing.now_segment = actual_segment_num;
+        self.monkey_climbing.now_segment = final_actual_segment_num;
         let mut found = false;
         let mut ind = 0;
         while !found {
@@ -411,7 +432,7 @@ impl crate::TreeStruct {
                     ind = if ind == 0 {0} else {ind - 1};
                 }
                 Some(re) => {
-                    let (pos1, pos2) = re;
+                    let (_pos1, pos2) = re;
                     if self.monkey_climbing.total_height > pos2.center_pos {
                         ind += 1;
                     } else {
@@ -441,9 +462,335 @@ impl crate::TreeStruct {
             left_arm_right_arm_left_leg_right_leg.push(crate::Pos{x, y});
         }
         self.monkey_climbing.left_arm_right_arm_left_leg_right_leg = left_arm_right_arm_left_leg_right_leg.try_into().unwrap();
+        let are_arm = [true, true, false, false];
+        let are_left = [true, false, true, false];
+        for i in 0..4 {
+            let is_arm = are_arm[i];
+            let is_left = are_left[i];
+            let start = i * 36;
+            self.populate_limb_triangles(i, is_arm, is_left, start);
+        }
         self.monkey_climbing.refresh_arrays_climbing()
     }
 
+    fn get_pos_angle_extrapolate(&self, height: f32) -> (crate::Pos, f32) {
+        let x;
+        let y;
+        let angle;
+        if height <= 0.0 {
+            x = self.x_start;
+            y = self.y_start + height;
+            angle = 0.0;
+        } else {
+            let last_segment = self.tree_for_climbing.last().unwrap();
+            let tree_total_length = last_segment.dist_from_root_start + last_segment.length;
+            if height >= tree_total_length {
+                let dif_height = height - tree_total_length;
+                match &last_segment.for_not_linear {
+                    None => {
+                        angle = last_segment.angle_start;
+                    }
+                    Some(not_linear) => {
+                        angle = not_linear.angle_stop;
+                    }
+                }
+                x = last_segment.end_x - dif_height * angle.sin();
+                y = last_segment.end_y + dif_height * angle.cos();
+            } else {
+                let segment_num = self.monkey_climbing.now_segment;
+                let actual_segment_num;
+                let _actual_dist_from_root;
+                (actual_segment_num,
+                x,
+                y,
+                _actual_dist_from_root) = self.get_segment_x_y_dist_from_root_body(height, segment_num);
+                let now_segment = &self.tree_for_climbing[actual_segment_num];
+                match &now_segment.for_not_linear {
+                    None => {
+                        angle = now_segment.angle_start;
+                    }
+                    Some(not_linear) => {
+                        let height_dif = height - now_segment.dist_from_root_start;
+                        let length = now_segment.length;
+                        let angle_start = now_segment.angle_start;
+                        let angle_stop = not_linear.angle_stop;
+                        angle = angle_start + (angle_stop - angle_start) * height_dif / length;
+                    }
+                }
+            }
+        }
+        (crate::Pos{x, y}, angle)
+    }
+    
+    fn get_x_y_start_limb(&self, deltay: f32, deltax: f32) -> crate::Pos {
+        let height_start = self.monkey_climbing.total_height + deltay;
+        let (pos_center, angle) = self.get_pos_angle_extrapolate(height_start);
+        let x = pos_center.x + deltax * angle.cos();
+        let y = pos_center.y + deltax * angle.sin();
+        return crate::Pos{x, y};
+    }
+
+    fn populate_limb_triangles(&mut self, limb_num: usize, is_arm: bool, is_left: bool, start: usize) {
+        let deltay;
+        let deltax;
+        let is_clockwise;
+        let l;
+        let w1;
+        let w2;
+        let w3;
+        if is_arm {
+            l = ARM_SEGMENT_LENGTH;
+            w1 = ARM_WIDTH_START;
+            w2 = ARM_WIDTH_MID;
+            w3 = ARM_WIDTH_END;
+            deltay = DELTAY_FRONT;
+            if is_left {
+                deltax = -DELTAX_FRONT;
+                is_clockwise = false;
+            } else {
+                deltax = DELTAX_FRONT;
+                is_clockwise = true;
+            }
+        } else {
+            l = LEG_SEGMENT_LENGTH;
+            w1 = LEG_WIDTH_START;
+            w2 = LEG_WIDTH_MID;
+            w3 = LEG_WIDTH_END;
+            deltay = -DELTAY_BACK;
+            if is_left {
+                deltax = -DELTAX_BACK;
+                is_clockwise = true;
+            } else {
+                deltax = DELTAX_BACK;
+                is_clockwise = false;
+            }
+        }
+        let limb = &self.monkey_climbing.left_arm_right_arm_left_leg_right_leg[limb_num];
+        let pos_start = self.get_x_y_start_limb(deltay, deltax);
+        let pos_ancle = get_ancle(&pos_start,
+                                       limb,
+                                       l,
+                                       is_clockwise);
+        //    5____________6 
+        //  4 _\   _____---| end
+        // 3____8--________7
+        // |   /|    /|\
+        // |  / |     / //is_clockwise here is false
+        // | /  |____/
+        // |/   |
+        // 2____1
+        // start
+
+        let m = if is_clockwise {1.0} else {-1.0};
+        let deltax1 = pos_ancle.x - pos_start.x;
+        let deltay1 = pos_ancle.y - pos_start.y;
+        let ratio1 = w1 * 0.5 / l;
+        let x1 = pos_start.x - deltay1 * ratio1 * m;
+        let y1 = pos_start.y + deltax1 * ratio1 * m;
+        let x2 = pos_start.x + deltay1 * ratio1 * m;
+        let y2 = pos_start.y - deltax1 * ratio1 * m;
+        let ratio2 = w2 * 0.5 / l;
+        let x3 = pos_ancle.x + deltay1 * ratio2 * m;
+        let y3 = pos_ancle.y - deltax1 * ratio2 * m;
+        let deltax2 = limb.x - pos_ancle.x;
+        let deltay2 = limb.y - pos_ancle.y;
+        let x5 = pos_ancle.x + deltay2 * ratio2 * m;
+        let y5 = pos_ancle.y - deltax2 * ratio2 * m;
+        let ratio3 = w3 * 0.5 / l;
+        let x6 = limb.x + deltay2 * ratio3 * m;
+        let y6 = limb.y - deltax2 * ratio3 * m;
+        let x7 = limb.x - deltay2 * ratio3 * m;
+        let y7 = limb.y + deltax2 * ratio3 * m;
+        // we need ghost points to calculate intersection
+        let g3x = pos_ancle.x - deltay1 * ratio2 * m;
+        let g3y = pos_ancle.y + deltax1 * ratio2 * m;
+        let g5x = pos_ancle.x - deltay2 * ratio2 * m;
+        let g5y = pos_ancle.y + deltax2 * ratio2 * m;
+        let pos1 = crate::Pos{x:x1, y:y1};
+        let pos2 = crate::Pos{x:g3x, y:g3y};
+        let pos3 = crate::Pos{x:g5x, y:g5y};
+        let pos4 = crate::Pos{x:x7, y:y7};
+        let pos8 = lines_intersection(pos1, pos2, pos3, pos4);
+        let x8 = pos8.x;
+        let y8 = pos8.y;
+        
+        let x4_center = (x3 + x5) * 0.5;
+        let y4_center = (y3 + y5) * 0.5;
+        let deltax_4 = x4_center - pos_ancle.x;
+        let deltay_4 = y4_center - pos_ancle.y;
+        let delta_4_len = (deltax_4 * deltax_4 + deltay_4 * deltay_4).sqrt() + 0.000000001;
+        let ratio = w2 * 0.5 / delta_4_len;
+        let deltax_4_actual = deltax_4 * ratio;
+        let deltay_4_actual = deltay_4 * ratio;
+        let x4 = pos_ancle.x + deltax_4_actual;
+        let y4 = pos_ancle.y + deltay_4_actual;
+        let triangles = [
+            x8, y8, x2, y2, x1, y1,
+            x8, y8, x3, y3, x2, y2,
+            x8, y8, x4, y4, x3, y3,
+            x8, y8, x5, y5, x4, y4,
+            x8, y8, x6, y6, x5, y5,
+            x8, y8, x7, y7, x6, y6
+        ];
+        self.monkey_climbing.vertex_arr[start..start + 36].copy_from_slice(&triangles);
+    }
+
+    pub fn update_tail(&mut self, deltat: f32) { // deltat in seconds
+        self.monkey_climbing.tail_time = (self.monkey_climbing.tail_time + deltat) % TAIL_PERIOD;
+        let tail_i = (self.monkey_climbing.tail_time * (TAIL_FRAMES as f32) / TAIL_PERIOD).floor() as usize;
+        let (row,
+             col,
+             flip_horizontal,
+             flip_vertical) = get_ninframes_row_col_fliph_flipv(tail_i);
+        let angle_start = (tail_i as f32) * PI * 2.0 / (TAIL_FRAMES as f32);
+        let deltax_from_center = angle_start.cos() * TAIL_DELTAX_START;
+        let (o1x, o2x, o1y, o2y) = get_points_original(row, col);
+        let x1;
+        let x2;
+        let y1;
+        let y2;
+        let deltax_from_start_to_p1 = TAIL_X_CENTER + deltax_from_center;
+        let deltay_from_start_to_p1;
+        if flip_horizontal {
+            x1 = o2x / IMAGE_SIDE;
+            x2 = o1x / IMAGE_SIDE;
+        } else {
+            x1 = o1x / IMAGE_SIDE;
+            x2 = o2x / IMAGE_SIDE;
+        }
+        if flip_vertical {
+            y1 = o2y / IMAGE_SIDE;
+            y2 = o1y / IMAGE_SIDE;
+            deltay_from_start_to_p1 = TAIL_DELTAY_BOTTOM;
+        } else {
+            y1 = o1y / IMAGE_SIDE;
+            y2 = o2y / IMAGE_SIDE;
+            deltay_from_start_to_p1 = TAIL_DELTAY;
+        }
+        let uv_triangles = [
+            x1, y1,
+            x2, y1,
+            x2, y2,
+            x1, y1,
+            x1, y2,
+            x2, y2];
+        self.monkey_climbing.texture_arr[156..168].copy_from_slice(&uv_triangles);
+        let tail_start_h = self.monkey_climbing.total_height - DELTAY_BACK - LEG_WIDTH_START * 0.5;
+        let (pos_tail_start, angle) = self.get_pos_angle_extrapolate(tail_start_h);
+        let deltax_render = deltax_from_start_to_p1 * crate::MONKEY_SCALING;
+        let deltay_render = deltay_from_start_to_p1 * crate::MONKEY_SCALING;
+        // both these deltax and deltay are positive
+        // P1-----P2
+        // |start |
+        // |      |
+        // |      |
+        // |      |
+        // P3-----P4
+        let p1_x = pos_tail_start.x - deltax_render * angle.cos() - deltay_render * angle.sin();
+        let p1_y = pos_tail_start.y - deltax_render * angle.sin() + deltay_render * angle.cos();
+        let width_render = TAIL_FRAMEWIDTH * crate::MONKEY_SCALING;
+        let height_render = TAIL_FRAMEHEIGHT * crate::MONKEY_SCALING;
+        let p2_x = p1_x + width_render * angle.cos();
+        let p2_y = p1_y + width_render * angle.sin();
+        let p3_x = p1_x + height_render * angle.sin();
+        let p3_y = p1_y - height_render * angle.cos();
+        let p4_x = p3_x + width_render * angle.cos();
+        let p4_y = p3_y + width_render * angle.sin();
+        let pos_triangles = [
+            p1_x, p1_y,
+            p2_x, p2_y,
+            p4_x, p4_y,
+            p1_x, p1_y,
+            p3_x, p3_y,
+            p4_x, p4_y
+        ];
+        self.monkey_climbing.vertex_arr[156..168].copy_from_slice(&pos_triangles);
+        self.monkey_climbing.convert_vert_arr_to_screen_coords(156, 168);
+    }
+}
+
+fn get_points_original(row: usize, col: usize) -> (f32, f32, f32, f32) {
+    //crate::log(&format!("row {:?} col {:?}", row, col));
+    let p0x = IMAGE_SIDE - (TAIL_COLUMNS as f32) * TAIL_FRAMEWIDTH;
+    let p0y = 0.0;
+    let o1x = p0x + TAIL_FRAMEWIDTH * (col as f32);
+    let o2x = p0x + TAIL_FRAMEWIDTH * ((col + 1) as f32);
+    let o1y = p0y + TAIL_FRAMEHEIGHT * (row as f32);
+    let o2y = p0y + TAIL_FRAMEHEIGHT * ((row + 1) as f32);
+    crate::log(&format!("o1x {:?} o1y {:?} o2x {:?} o2y {:?}", o1x, o1y, o2x, o2y));
+    /*let o1x = 261.0;
+    let o1y = 261.0;
+    let o2x = 261.0;
+    let o2y = 261.0;*/
+    (o1x, o2x, o1y, o2y)
+}
+
+fn get_ninframes_row_col_fliph_flipv(tail_i: usize) -> (usize, usize, bool, bool) {
+    let n_frames_in_serie = TAIL_COLUMNS * TAIL_ROWS - 1;
+    let quart = tail_i / n_frames_in_serie;
+    let flip_horizontal;
+    let flip_vertical;
+    let n_in_serie = tail_i % n_frames_in_serie;
+    let n_in_frames;
+    if quart == 0 {
+        flip_horizontal = false;
+        flip_vertical = false;
+        n_in_frames = n_frames_in_serie - n_in_serie;
+    } else {
+        if quart == 1 {
+            flip_horizontal = false;
+            flip_vertical = true;
+            n_in_frames = n_in_serie;
+        } else {
+            if quart == 2 {
+                flip_horizontal = true;
+                flip_vertical = false;
+                n_in_frames = n_frames_in_serie - n_in_serie;
+            } else { // quart == 3
+                flip_horizontal = true;
+                flip_vertical = true;
+                n_in_frames = n_in_serie;
+            }
+        }
+    }
+    let col = n_in_frames / TAIL_ROWS;
+    let row = n_in_frames % TAIL_ROWS;
+    (row, col, flip_horizontal, flip_vertical)
+}
+
+fn lines_intersection(pos1: crate::Pos, pos2: crate::Pos, pos3: crate::Pos, pos4: crate::Pos) -> crate::Pos{
+    let deltax1 = pos2.x - pos1.x;
+    let deltay1 = pos2.y - pos1.y;
+    let deltax2 = pos4.x - pos3.x;
+    let deltay2 = pos4.y - pos3.y;
+    let mult1 = deltax2 * deltay1;
+    let mult2 = deltay2 * deltax1;
+    let x;
+    let y;
+    if mult2 != mult1 {
+        y = ((pos3.x - pos1.x) * deltay2 * deltay1 - pos3.y * mult1 + pos1.y * mult2) / (mult2 - mult1);
+        x = ((pos3.y - pos1.y) * deltax2 * deltax1 - pos3.x * mult2 + pos1.x * mult1) / (mult1 - mult2);
+    } else { // fallback if they are parallel
+        x = (pos1.x + pos4.x) * 0.5;
+        y = (pos1.y + pos4.y) * 0.5;
+    }
+    crate::Pos{x, y}
+}
+
+fn get_ancle(pos1: &crate::Pos, pos2: &crate::Pos, l: f32, is_clockwise: bool) -> crate::Pos {
+    let deltax = pos2.x - pos1.x;
+    let deltay = pos2.y - pos1.y;
+    let center_x = (pos1.x + pos2.x) / 2.0;
+    let center_y = (pos1.y + pos2.y) / 2.0;
+    let dist_squared = deltax * deltax + deltay * deltay;
+    let h_dist_squared = l * l - dist_squared / 4.0;
+    let h_dist = if h_dist_squared > 0.0 {h_dist_squared.sqrt()} else {0.0};
+    let dist = dist_squared.sqrt();
+    let m = if is_clockwise {1.0} else {-1.0};
+    let ratio = h_dist / dist;
+    let x = center_x + m * deltay * ratio;
+    let y = center_y - m * deltax * ratio;
+    crate::Pos{x, y}
 }
 
 impl crate::Monkey {

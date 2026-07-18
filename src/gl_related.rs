@@ -97,10 +97,10 @@ pub fn prepare_gl(img: web_sys::HtmlImageElement,
 
     let texture_coords: [f32; 12] = [0.0, 0.0, 
                                      crate::CANVAS_REF_WIDTH, 0.0,
-                                     0.0, crate::CANVAS_REF_WIDTH,
+                                     0.0, crate::CANVAS_REF_HEIGHT,
                                      crate::CANVAS_REF_WIDTH, 0.0,
-                                     crate::CANVAS_REF_WIDTH, crate::CANVAS_REF_WIDTH,
-                                     0.0, crate::CANVAS_REF_WIDTH];                     
+                                     crate::CANVAS_REF_WIDTH, crate::CANVAS_REF_HEIGHT,
+                                     0.0, crate::CANVAS_REF_HEIGHT];                     
     let tex_coord_attribute_location = context.get_attrib_location(&program, "a_texCoord");
     //crate::log(&format!("tex_coord {:?}", tex_coord_attribute_location));
     let tex_coord_buffer = context.create_buffer().ok_or("Failed to create buffer")?;

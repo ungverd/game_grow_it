@@ -1,6 +1,5 @@
 pub const MONKEY_START_X: f32 = 200.0;
 pub const MONKEY_START_Y: f32 = 1.0;
-const MONKEY_SCALING: f32 = 0.7; // 0.5 - monkey will be drawn smaller
 
 pub struct MonkeyRunning {
     x_pos: f32,
@@ -73,13 +72,13 @@ impl MonkeyRunning {
         self.parameters.texture_height = height;
         self.parameters.monkey_width = frame_width;
         self.parameters.monkey_height = frame_height;
-        self.parameters.width_to_draw = frame_width * MONKEY_SCALING;
-        self.parameters.height_to_draw = frame_height * MONKEY_SCALING;
+        self.parameters.width_to_draw = frame_width * crate::MONKEY_SCALING;
+        self.parameters.height_to_draw = frame_height * crate::MONKEY_SCALING;
         self.parameters.n_frames_running = n_frames;
         self.parameters.loop_duration = time_loop;
         self.parameters.advancement_px = advance_loop * self.parameters.width_to_draw;
         self.parameters.width_screen = crate::CANVAS_REF_WIDTH;
-        self.parameters.height_screen = crate::CANVAS_REF_WIDTH;
+        self.parameters.height_screen = crate::CANVAS_REF_HEIGHT;
         self.parameters.number_vertical = (height / frame_height).floor() as i32;
         self.parameters.number_horizontal = (width / frame_width).floor() as i32;
         self.parameters.v = self.parameters.advancement_px / time_loop;
