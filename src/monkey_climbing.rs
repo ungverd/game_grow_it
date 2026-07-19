@@ -4,8 +4,8 @@ use crate::START_X;
 
 pub const DELTAX_FRONT: f32 = 3.0; //px
 pub const DELTAX_BACK: f32 = 3.0; //px
-pub const DELTAY_FRONT: f32 = 9.0; //px
-pub const DELTAY_BACK: f32 = 9.0; //px
+pub const DELTAY_FRONT: f32 = 10.0; //px
+pub const DELTAY_BACK: f32 = 10.0; //px
 pub const LEG_SEGMENT_LENGTH: f32 = 10.0; //px
 pub const ARM_SEGMENT_LENGTH: f32 = 9.0; //px
 pub const ARM_WIDTH_START: f32 = 4.0; //px
@@ -27,6 +27,11 @@ const TAIL_DELTAX_START: f32 = 6.0; //px
 const TAIL_X_CENTER: f32 = TAIL_FRAMEWIDTH / 2.0; //px
 const TAIL_DELTAY_BOTTOM: f32 = TAIL_FRAMEHEIGHT - TAIL_FULLEN - TAIL_DELTAY;
 const IMAGE_SIDE: f32 = 1024.0; //px
+const HEAD_WIDTH: f32 = 15.0 * crate::MONKEY_SCALING; //px
+const HEAD_HEIGHT: f32 = 15.0 * crate::MONKEY_SCALING; //px
+const BUTT_WIDTH: f32 = 15.0 * crate::MONKEY_SCALING; //px
+const BUTT_HEIGHT: f32 = 4.0 * crate::MONKEY_SCALING; //px
+
 
 const PI: f32 = std::f32::consts::PI;
 pub const W: f32 = crate::DEST_REF as f32; // three width in px
@@ -47,8 +52,8 @@ pub struct MonkeyClimbing {
     left_arm_right_arm_left_leg_right_leg: [crate::Pos; 4],
     goal_height: f32,
     pub on_goal: bool,
-    pub vertex_arr: [f32; 168],
-    pub texture_arr: [f32; 168],
+    pub vertex_arr: [f32; 180],
+    pub texture_arr: [f32; 180],
     pub tail_time: f32,
 }
 
@@ -228,7 +233,7 @@ impl crate::TreeStruct {
 
     pub fn get_monkey_max_height(&self) -> f32 {
         let h0 = self.monkey_climbing.total_height;
-        let h_head = h0 + DELTAY_FRONT + 5.0;
+        let h_head = h0 + DELTAY_FRONT + HEAD_HEIGHT;
         let monkey_segment = self.monkey_climbing.now_segment;
         let h_arm = h0 + self.tree_for_climbing[monkey_segment].arm_dist;
         if h_head > h_arm {h_head} else {h_arm}
@@ -334,6 +339,34 @@ impl crate::TreeStruct {
 
 impl MonkeyClimbing {
     pub fn new() -> MonkeyClimbing {
+        let mut texture_arr = [261.0 / IMAGE_SIDE; 180]; // 261, 261 is "not transparent" point on monkey texture
+        let head_x1 = 426.0 / IMAGE_SIDE;
+        let head_x2 = 441.0 / IMAGE_SIDE;
+        let head_y1 = 954.0 / IMAGE_SIDE;
+        let head_y2 = 969.0 / IMAGE_SIDE;
+        let butt_y1 = 950.0 / IMAGE_SIDE;
+        let butt_y2 = 954.0 / IMAGE_SIDE;
+        // x1y2___________x2y2
+        //  |  \ xxxxxx    |
+        //  |  xxx\xxxxxx  |
+        //  |  xxxxxx\xxx  |
+        //  |  xxxxxxxxxx\ |
+        // x1y1___________x2y1
+        let head_butt_arr = [
+            head_x1, head_y2,
+            head_x1, head_y1,
+            head_x2, head_y1,
+            head_x1, head_y2,
+            head_x2, head_y2,
+            head_x2, head_y1,
+
+            head_x1, butt_y2,
+            head_x1, butt_y1,
+            head_x2, butt_y1,
+            head_x1, butt_y2,
+            head_x2, butt_y2,
+            head_x2, butt_y1];
+        texture_arr[144..168].copy_from_slice(&head_butt_arr);
         MonkeyClimbing{
             total_height: 0.0,
             now_segment: 0,
@@ -341,8 +374,8 @@ impl MonkeyClimbing {
             left_arm_right_arm_left_leg_right_leg: [crate::Pos::new(), crate::Pos::new(), crate::Pos::new(), crate::Pos::new()],
             goal_height: 0.0,
             on_goal: false,
-            vertex_arr: [0.0; 168],
-            texture_arr: [261.0 / 1024.0; 168],
+            vertex_arr: [0.0; 180],
+            texture_arr,
             tail_time: 0.0,
         }
     }
@@ -358,19 +391,9 @@ impl MonkeyClimbing {
         }
     }
 
-    pub fn refresh_arrays_climbing(&mut self) {
-        let x_left = self.body_pos.x - 2.0; 
-        let x_right = self.body_pos.x + 2.0; 
-        let y_top = self.body_pos.y + 2.0; 
-        let y_bottom = self.body_pos.y - 2.0; 
-        let arr = [x_left,  y_bottom,
-                        x_right, y_bottom,
-                        x_left,  y_top,
-                        x_right, y_bottom,
-                        x_right, y_top,
-                        x_left,  y_top,];
-        self.vertex_arr[144..156].copy_from_slice(&arr);
-        self.convert_vert_arr_to_screen_coords(0, 156);
+    pub fn finish_and_update_to_screen_coords_arrays_climbing(&mut self) {
+        
+        self.convert_vert_arr_to_screen_coords(0, 168);
     }
 }
 
@@ -470,7 +493,8 @@ impl crate::TreeStruct {
             let start = i * 36;
             self.populate_limb_triangles(i, is_arm, is_left, start);
         }
-        self.monkey_climbing.refresh_arrays_climbing()
+        self.set_head_butt();
+        self.monkey_climbing.finish_and_update_to_screen_coords_arrays_climbing()
     }
 
     fn get_pos_angle_extrapolate(&self, height: f32) -> (crate::Pos, f32) {
@@ -674,7 +698,7 @@ impl crate::TreeStruct {
             x1, y1,
             x1, y2,
             x2, y2];
-        self.monkey_climbing.texture_arr[156..168].copy_from_slice(&uv_triangles);
+        self.monkey_climbing.texture_arr[168..180].copy_from_slice(&uv_triangles);
         let tail_start_h = self.monkey_climbing.total_height - DELTAY_BACK - LEG_WIDTH_START * 0.5;
         let (pos_tail_start, angle) = self.get_pos_angle_extrapolate(tail_start_h);
         let deltax_render = deltax_from_start_to_p1 * crate::MONKEY_SCALING;
@@ -704,8 +728,57 @@ impl crate::TreeStruct {
             p3_x, p3_y,
             p4_x, p4_y
         ];
-        self.monkey_climbing.vertex_arr[156..168].copy_from_slice(&pos_triangles);
-        self.monkey_climbing.convert_vert_arr_to_screen_coords(156, 168);
+        self.monkey_climbing.vertex_arr[168..180].copy_from_slice(&pos_triangles);
+        self.monkey_climbing.convert_vert_arr_to_screen_coords(168, 180);
+    }
+
+    fn set_head_butt(&mut self) {
+        // P2:x1y2___________x2y2:P3
+        //     |  \ xxxxxx    |
+        //     |  xxx\xxxxxx  |
+        //     |  xxxxxx\xxx  |
+        //     |  xxxxxxxxxx\ |
+        // P1:x1y1___________x2y1:P4
+        /*head_arr = [
+            P2, P1, P4,
+            P2, P3, P4];*/
+        let head_h = self.monkey_climbing.total_height + DELTAY_FRONT - 0.5;
+        let (head_start, angle) = self.get_pos_angle_extrapolate(head_h);
+        let p1_x = head_start.x - HEAD_WIDTH*0.5 * angle.cos();
+        let p1_y = head_start.y - HEAD_WIDTH*0.5 * angle.sin();
+        let p2_x = p1_x - HEAD_HEIGHT * angle.sin();
+        let p2_y = p1_y + HEAD_HEIGHT * angle.cos();
+        let p3_x = p2_x + HEAD_WIDTH * angle.cos();
+        let p3_y = p2_y + HEAD_WIDTH * angle.sin();
+        let p4_x = p3_x + HEAD_HEIGHT * angle.sin();
+        let p4_y = p3_y - HEAD_HEIGHT * angle.cos();
+
+        let butt_h = self.monkey_climbing.total_height - DELTAY_BACK + 0.2;
+        let (butt_start, angle) = self.get_pos_angle_extrapolate(butt_h);
+        let b2_x = butt_start.x - BUTT_WIDTH*0.5 * angle.cos();
+        let b2_y = butt_start.y - BUTT_WIDTH*0.5 * angle.sin();
+        let b3_x = b2_x + BUTT_WIDTH * angle.cos();
+        let b3_y = b2_y + BUTT_WIDTH * angle.sin();
+        let b4_x = b3_x + BUTT_HEIGHT * angle.sin();
+        let b4_y = b3_y - BUTT_HEIGHT * angle.cos();
+        let b1_x = b4_x - BUTT_WIDTH * angle.cos();
+        let b1_y = b4_y - BUTT_WIDTH * angle.sin();
+
+        let arr = [
+            p2_x, p2_y,
+            p1_x, p1_y,
+            p4_x, p4_y,
+            p2_x, p2_y,
+            p3_x, p3_y,
+            p4_x, p4_y,
+
+            b2_x, b2_y,
+            b1_x, b1_y,
+            b4_x, b4_y,
+            b2_x, b2_y,
+            b3_x, b3_y,
+            b4_x, b4_y,];
+        self.monkey_climbing.vertex_arr[144..168].copy_from_slice(&arr);
     }
 }
 
@@ -844,7 +917,7 @@ fn get_circ_extended_length(r: f32) -> (f32, f32) {
     let angle_up = angle_intersection_arm + angle_body_up;
     let angle_down = angle_body_down + angle_intersection_leg;
     let total_angle = angle_up + angle_down;
-    let max_angle = PI * 2.0 / 3.0;
+    let max_angle = PI * 2.5 / 3.0;
     let (converted_angle_up, converted_angle_down) = if total_angle < max_angle {
         (angle_up, angle_down)
     } else {
