@@ -194,7 +194,12 @@ pub struct GameState {
     straight_up_dist: f32,
     straight_down_dist: f32,
     monkey_climbing_program: Option<WebGlProgram>,
-    height_index:Option<WebGlUniformLocation>
+    height_index:Option<WebGlUniformLocation>,
+    monkey_climbing_program_body: Option<WebGlProgram>,
+    height_index_body:Option<WebGlUniformLocation>,
+    ubo_buffer_climbing_body: Option<WebGlBuffer>,
+    monkey_position_buffer_climbing_body: Option<WebGlBuffer>,
+    monkey_vao_climbing_body: Option<WebGlVertexArrayObject>
 }
 
 #[wasm_bindgen]
@@ -259,8 +264,12 @@ impl GameState {
             straight_up_dist,
             straight_down_dist,
             monkey_climbing_program: None,
-            height_index: None
-
+            height_index: None,
+            monkey_climbing_program_body: None,
+            height_index_body: None,
+            ubo_buffer_climbing_body: None,
+            monkey_position_buffer_climbing_body: None,
+            monkey_vao_climbing_body: None,
         })
     }
 
@@ -344,7 +353,12 @@ impl GameState {
             monkey_position_buffer,
             monkey_tex_coords_buffer,
             monkey_climbing_program,
-            height_index) = gl_related::prepare_monkey(img_monkey,
+            height_index,
+            monkey_climbing_program_body,
+            height_index_body,
+            ubo_buffer_climbing_body,
+            monkey_position_buffer_climbing_body,
+            monkey_vao_climbing_body) = gl_related::prepare_monkey(img_monkey,
                                                                              &self.context,
                                                                              &self.monkey.running.vertex_arr,
                                                                              &self.monkey.running.texture_arr)?;
@@ -358,6 +372,11 @@ impl GameState {
         self.background_vao = Some(background_vao);
         self.monkey_climbing_program = Some(monkey_climbing_program);
         self.height_index = height_index;
+        self.monkey_climbing_program_body = Some(monkey_climbing_program_body);
+        self.height_index_body = height_index_body;
+        self.ubo_buffer_climbing_body = Some(ubo_buffer_climbing_body);
+        self.monkey_position_buffer_climbing_body = Some(monkey_position_buffer_climbing_body);
+        self.monkey_vao_climbing_body = Some(monkey_vao_climbing_body);
         self.draw_tree()?;
         Ok(())
     }
@@ -423,6 +442,18 @@ impl GameState {
         let vert_count = tree_struct.monkey_climbing.vertex_arr.len() as i32 / 2;
         self.context.uniform1f(self.height_index.as_ref(), height);
         gl_related::draw(&self.context, vert_count, false, 0);
+
+        self.context.use_program(self.monkey_climbing_program_body.as_ref());
+        self.context.bind_vertex_array(self.monkey_vao_climbing_body.as_ref());
+        self.context.uniform1f(self.height_index_body.as_ref(), height);
+        let body_quad = tree_struct.set_params_body_climbing_and_return_quad(
+            &self.context,
+            (self.ubo_buffer_climbing_body.as_ref()).unwrap());
+        gl_related::apply_array_climbing_body(
+            &self.context,
+            &body_quad,
+            self.monkey_position_buffer_climbing_body.as_ref());
+        gl_related::draw(&self.context, 6, false, 0);
         Ok(())
     }
 

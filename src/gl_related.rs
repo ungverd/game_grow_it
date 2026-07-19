@@ -446,6 +446,33 @@ pub fn apply_arrays_monkey(context:  &WebGl2RenderingContext,
     context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
 }
 
+pub fn apply_array_climbing_body(
+        context:  &WebGl2RenderingContext,
+        body_vertex_array: &[f32],
+        body_vertex_buffer: Option<&WebGlBuffer>) {
+
+    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, body_vertex_buffer);
+
+    // Note that `Float32Array::view` is somewhat dangerous (hence the
+    // `unsafe`!). This is creating a raw view into our module's
+    // `WebAssembly.Memory` buffer, but if we allocate more pages for ourself
+    // (aka do a memory allocation in Rust) it'll cause the buffer to change,
+    // causing the `Float32Array` to be invalid.
+    //
+    // As a result, after `Float32Array::view` we have to be very careful not to
+    // do any memory allocations before it's dropped.
+    unsafe {
+        let positions_array_buf_view = js_sys::Float32Array::view(body_vertex_array);
+
+        context.buffer_data_with_array_buffer_view(
+            WebGl2RenderingContext::ARRAY_BUFFER,
+            &positions_array_buf_view,
+            WebGl2RenderingContext::DYNAMIC_DRAW,
+        );
+    }
+    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
+}
+
 pub fn prepare_monkey(img: web_sys::HtmlImageElement,
                       context:  &WebGl2RenderingContext,
                       monkey_vertex_array: &[f32],
@@ -454,7 +481,12 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
                                                                 WebGlBuffer,
                                                                 WebGlBuffer,
                                                                 WebGlProgram,
-                                                                Option<WebGlUniformLocation>), JsValue> {
+                                                                Option<WebGlUniformLocation>,
+                                                                WebGlProgram,
+                                                                Option<WebGlUniformLocation>,
+                                                                WebGlBuffer,
+                                                                WebGlBuffer,
+                                                                WebGlVertexArrayObject), JsValue> {
     let vert_shader = compile_shader(
         &context,
         WebGl2RenderingContext::VERTEX_SHADER,
@@ -680,7 +712,206 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     let monkey_texture_index = context.get_uniform_location(&program_climbing, "monkey_image");
     context.uniform1i(monkey_texture_index.as_ref(), 3);
     let height_on_tree_index = context.get_uniform_location(&program_climbing, "heightOnTree");
-    Ok((program, vao, positions_buffer, tex_coord_buffer, program_climbing, height_on_tree_index))
+
+    // monkey body for climbing
+    let vert_shader_climbing_body = compile_shader(
+        &context,
+        WebGl2RenderingContext::VERTEX_SHADER,
+        r##"#version 300 es
+ 
+        in vec4 position;
+        out vec2 v_screenPosition;
+
+        void main() {
+            gl_Position = position;
+            v_screenPosition = (position.xy * 0.5) + vec2(0.5, 0.5);
+        }
+        "##,
+    )?;
+    
+    let frag_shader_climbing_body = compile_shader(
+        &context,
+        WebGl2RenderingContext::FRAGMENT_SHADER,
+        &format!(r##"#version 300 es
+    
+        precision mediump float;
+        const uint MAX_VALS = {:?}u;
+        const float PI = 3.1415926538;
+        const float SCREEN_WIDTH = {:?};
+        const float SCREEN_HEIGHT = {:?};
+        const float SEMI_WIDTH = {:?};
+
+
+        layout(std140) uniform Inputs {{
+            vec4 inputs[MAX_VALS];
+        }};
+        uniform sampler2D background_image;
+        uniform sampler2D ina;
+        uniform float heightOnTree;
+        in vec2 v_screenPosition;
+        out vec4 outColor;
+
+        float outa_to_a(vec4 outa) {{
+            float d1 = round(outa.x * 255.0);
+            float d2 = round(outa.y * 255.0);
+            float d3 = round(outa.z * 255.0);
+            float d4 = round(outa.w * 255.0);
+            float m = 256.0;
+            float a_before = d1 + d2 * m + d3 * m * m + d4 * m * m * m;
+            float a = a_before / 10.0;
+            return a;
+        }}
+        
+        bool for_not_linear(float x, float y, float cx, float cy, float r, float a1, float a2) {{
+            // angle 1 and 2 converted, r > 0
+            float dx = x - cx;
+            float dy = y - cy;
+            if (abs(sqrt(dx*dx + dy*dy) - r) > SEMI_WIDTH) {{
+                return false;
+            }} else {{
+                float now_angle = atan(dy, dx);
+                int converted_a1 = int(floor((a1 - now_angle) / (2.0 * PI)));
+                int converted_a2 = int(floor((a2 - now_angle) / (2.0 * PI)));
+                return a1 != a2; 
+            }}
+        }}
+
+        bool for_linear(float x, float y, float cx, float cy, float alp, float l) {{
+            float x_conv = x - cx;
+            float y_conv = y - cy;
+            float a = cos(alp);
+            float b = sin(alp);
+            float c = -b;
+            float d = a;
+            float x_rotated = a * x_conv + b * y_conv;
+            float y_rotated = c * x_conv + d * y_conv;
+
+            return abs(x_rotated) <= SEMI_WIDTH &&
+                    y_rotated >= 0.0 &&
+                    y_rotated <= l;
+        }}
+
+        float get_number_from_vec4(uint i) {{
+            uint now_vec_n = i / 4u;
+            uint now_ind = i - now_vec_n * 4u;
+            return inputs[now_vec_n][now_ind];
+        }}
+
+        bool is_point_colored() {{
+            float x = v_screenPosition.x * SCREEN_WIDTH;
+            float y = v_screenPosition.y * SCREEN_HEIGHT;
+            uint max_val = uint(inputs[0][0]);
+            bool is_first = true;
+            bool is_linear;
+            uint i = 1u;
+            while(i < max_val) {{
+                float now_el = get_number_from_vec4(i);
+                if(now_el < 0.0) {{ // linear
+                    float cx = get_number_from_vec4(i + 1u);
+                    float cy = get_number_from_vec4(i + 2u);
+                    float alp = get_number_from_vec4(i + 3u);
+                    float l = get_number_from_vec4(i + 4u);
+                    if (for_linear(x, y, cx, cy, alp, l)) {{
+                        return true;
+                    }}
+                    i += 5u;
+                }} else {{ // not linear
+                    float cx = get_number_from_vec4(i + 1u);
+                    float cy = get_number_from_vec4(i + 2u);
+                    float r = get_number_from_vec4(i + 3u);
+                    float a1 = get_number_from_vec4(i + 4u);
+                    float a2 = get_number_from_vec4(i + 5u);
+                    if (for_not_linear(x, y, cx, cy, r, a1, a2)) {{
+                        return true;
+                    }}
+                    i += 6u;
+                }}
+            }}
+            return false;
+        }}
+
+        void main() {{
+            if (is_point_colored()) {{
+                float a = outa_to_a(texture(ina, v_screenPosition));
+                if (a < heightOnTree) {{
+                    outColor = vec4(0.0, 0.0, 0.0, 1.0);
+                }} else {{
+                    outColor = vec4(0.0, 0.3, 0.0, 0.3) + 0.7 * texture(background_image, v_screenPosition);
+                }}
+            }} else {{
+                discard;
+            }}
+        }}"##,
+        1024,
+        TARGET_TEXTURE_WIDTH as f32,
+        TARGET_TEXTURE_HEIGHT as f32,
+        12.0 * crate::MONKEY_SCALING * 0.5
+    ))?; // TODO
+
+    let program_climbing_body = link_program(&context, &vert_shader_climbing_body, &frag_shader_climbing_body)?;
+    context.use_program(Some(&program_climbing_body));
+
+
+    let position_attribute_location_body = context.get_attrib_location(&program_climbing_body, "position");
+    //crate::log(&format!("position_attribute_location {:?}", position_attribute_location));
+    let positions_buffer_body = context.create_buffer().ok_or("Failed to create buffer")?;
+    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&positions_buffer_body));
+
+    let vao_body = context
+        .create_vertex_array()
+        .ok_or("Could not create vertex array object")?;
+    context.bind_vertex_array(Some(&vao_body));
+
+    context.vertex_attrib_pointer_with_i32(
+        position_attribute_location_body as u32,
+        2,
+        WebGl2RenderingContext::FLOAT,
+        false,
+        0,
+        0,
+    );
+    context.enable_vertex_attrib_array(position_attribute_location_body as u32);
+    
+    let background_texture_index_body = context.get_uniform_location(&program_climbing_body, "background_image");
+    context.uniform1i(background_texture_index_body.as_ref(), 1);
+    let ina_texture_index_body = context.get_uniform_location(&program_climbing_body, "ina");
+    context.uniform1i(ina_texture_index_body.as_ref(), 2);
+    let height_on_tree_index_body = context.get_uniform_location(&program_climbing_body, "heightOnTree");
+
+    
+    let ubo_buffer_climbing_body = context.create_buffer().ok_or("Failed to create buffer")?;
+
+    let tot_arr = [0f32; 1024 * 4];
+    // Bind it to tell WebGL we are working on this buffer
+    context.bind_buffer(WebGl2RenderingContext::UNIFORM_BUFFER, Some(&ubo_buffer_climbing_body));
+    unsafe {
+        let rects_array_buf_view = js_sys::Float32Array::view(&tot_arr);
+
+        context.buffer_data_with_array_buffer_view(
+            WebGl2RenderingContext::UNIFORM_BUFFER,
+            &rects_array_buf_view,
+            WebGl2RenderingContext::DYNAMIC_DRAW,
+        );
+    }
+
+    context.bind_buffer(WebGl2RenderingContext::UNIFORM_BUFFER, None);
+    let ind = crate::NUM_UNIFORM_ARRAYS as u32;
+    context.bind_buffer_base(WebGl2RenderingContext::UNIFORM_BUFFER, ind, Some(&ubo_buffer_climbing_body));
+    let body_index = context.get_uniform_block_index(&program_climbing_body, "Inputs");
+    context.uniform_block_binding(&program_climbing_body, body_index, ind);
+
+    Ok((program,
+        vao,
+        positions_buffer,
+        tex_coord_buffer,
+        program_climbing,
+        height_on_tree_index,
+        program_climbing_body,
+        height_on_tree_index_body,
+        ubo_buffer_climbing_body,
+        positions_buffer_body,
+        vao_body,
+    ))
 }
 
 pub fn prepare_to_draw_background(context: &WebGl2RenderingContext) -> Result<(WebGlProgram,
