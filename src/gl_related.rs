@@ -772,7 +772,7 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
                 float now_angle = atan(dy, dx);
                 int converted_a1 = int(floor((a1 - now_angle) / (2.0 * PI)));
                 int converted_a2 = int(floor((a2 - now_angle) / (2.0 * PI)));
-                return a1 != a2; 
+                return converted_a1 != converted_a2; 
             }}
         }}
 
