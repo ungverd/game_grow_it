@@ -23,6 +23,16 @@ pub const DEST_REF: i32 = 26; // width of tree in pixels
 pub const START_X: f32 = 300.0;
 pub const START_Y: f32 = 1.0; // coordinates where three starts
 pub const MONKEY_SCALING: f32 = 0.7; // 0.5 - monkey will be drawn smaller
+pub const CLIMBING_SCALING: f32 = 0.5; // also monkey scaling but for climbing
+pub const IMAGE_SIDE: f32 = 1024.0; //px
+pub const BODY_START_Y: f32 = 569.0 / IMAGE_SIDE;
+pub const BODY_CENTER_X: f32 = 1005.0 / IMAGE_SIDE;
+const BODY_DELTA_X_PX: f32 = 12.0; // px on texture
+pub const BODY_DELTA_X_TEXTURE: f32 = BODY_DELTA_X_PX / IMAGE_SIDE;
+pub const BODY_SEMI_W_TO_DRAW: f32 = BODY_DELTA_X_PX * CLIMBING_SCALING;
+pub const PX_SCREEN_TO_MONKEY_TEXTURE: f32 = 1.0 / IMAGE_SIDE / CLIMBING_SCALING; // screen pixels multiply by this -> texture coords
+pub const BODY_LEN_SCREEN: f32 = monkey_climbing::DELTAY_BACK + monkey_climbing::DELTAY_FRONT;
+pub const BODY_LEN_TEXTURE: f32 = 36.0 / IMAGE_SIDE;
 
 #[wasm_bindgen]
 extern "C" {

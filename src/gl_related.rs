@@ -740,13 +740,16 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
         const float SCREEN_WIDTH = {:?};
         const float SCREEN_HEIGHT = {:?};
         const float SEMI_WIDTH = {:?};
-
+        const float BODY_START_Y = {:?};
+        const float BODY_CENTER_X = {:?};
+        const float PX_SCREEN_TO_MONKEY_TEXTURE = {:?};
 
         layout(std140) uniform Inputs {{
             vec4 inputs[MAX_VALS];
         }};
         uniform sampler2D background_image;
         uniform sampler2D ina;
+        uniform sampler2D monkey_image;
         uniform float heightOnTree;
         in vec2 v_screenPosition;
         out vec4 outColor;
@@ -762,21 +765,26 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
             return a;
         }}
         
-        bool for_not_linear(float x, float y, float cx, float cy, float r, float a1, float a2) {{
+        vec2 for_not_linear(float x, float y, float cx, float cy, float r, float a1, float a2) {{
             // angle 1 and 2 converted, r > 0
             float dx = x - cx;
             float dy = y - cy;
-            if (abs(sqrt(dx*dx + dy*dy) - r) > SEMI_WIDTH) {{
-                return false;
-            }} else {{
-                float now_angle = atan(dy, dx);
-                int converted_a1 = int(floor((a1 - now_angle) / (2.0 * PI)));
-                int converted_a2 = int(floor((a2 - now_angle) / (2.0 * PI)));
-                return converted_a1 != converted_a2; 
+            float res_x = sqrt(dx*dx + dy*dy) - r;
+            float now_angle = atan(dy, dx);
+            float converted_a1 = (a1 - now_angle) / (2.0 * PI);
+            float dif_a1;
+            if (a2 > a1) {{
+                dif_a1 = ceil(converted_a1) - converted_a1;
             }}
+            else {{
+                dif_a1 = converted_a1 - floor(converted_a1);
+            }}
+            float res_angle = dif_a1 * (2.0 * PI);
+            float res_y = r * res_angle;
+            return vec2(res_x, res_y);
         }}
 
-        bool for_linear(float x, float y, float cx, float cy, float alp, float l) {{
+        vec2 for_linear(float x, float y, float cx, float cy, float alp) {{
             float x_conv = x - cx;
             float y_conv = y - cy;
             float a = cos(alp);
@@ -786,9 +794,24 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
             float x_rotated = a * x_conv + b * y_conv;
             float y_rotated = c * x_conv + d * y_conv;
 
-            return abs(x_rotated) <= SEMI_WIDTH &&
-                    y_rotated >= 0.0 &&
-                    y_rotated <= l;
+            return vec2(x_rotated, y_rotated);
+        }}
+
+        bool verify_in_bounds(vec2 xy, float l) {{
+            return abs(xy.x) <= SEMI_WIDTH && xy.y >= 0.0 && xy.y <= l;
+        }}
+
+        bool verify_texture(vec2 xy, float l_start) {{
+            float x = xy.x;
+            float y = xy.y + l_start;
+            float converted_x = BODY_CENTER_X + x * PX_SCREEN_TO_MONKEY_TEXTURE;
+            float converted_y = BODY_START_Y - y * PX_SCREEN_TO_MONKEY_TEXTURE;
+            vec2 resCoord = vec2(converted_x, converted_y);
+            return texture(monkey_image, resCoord).x > 0.5;
+        }}
+
+        float get_total_not_linear(float r, float a1, float a2) {{
+            return abs((a2 - a1) * r);
         }}
 
         float get_number_from_vec4(uint i) {{
@@ -798,22 +821,23 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
         }}
 
         bool is_point_colored() {{
+            float passed_body_height = 0.0;
             float x = v_screenPosition.x * SCREEN_WIDTH;
             float y = v_screenPosition.y * SCREEN_HEIGHT;
             uint max_val = uint(inputs[0][0]);
             bool is_first = true;
             bool is_linear;
             uint i = 1u;
+            vec2 xy;
+            float l;
             while(i < max_val) {{
                 float now_el = get_number_from_vec4(i);
-                if(now_el < 0.0) {{ // linear
+                if (now_el < 0.0) {{ // linear
                     float cx = get_number_from_vec4(i + 1u);
                     float cy = get_number_from_vec4(i + 2u);
                     float alp = get_number_from_vec4(i + 3u);
-                    float l = get_number_from_vec4(i + 4u);
-                    if (for_linear(x, y, cx, cy, alp, l)) {{
-                        return true;
-                    }}
+                    l = get_number_from_vec4(i + 4u);
+                    xy = for_linear(x, y, cx, cy, alp);
                     i += 5u;
                 }} else {{ // not linear
                     float cx = get_number_from_vec4(i + 1u);
@@ -821,11 +845,14 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
                     float r = get_number_from_vec4(i + 3u);
                     float a1 = get_number_from_vec4(i + 4u);
                     float a2 = get_number_from_vec4(i + 5u);
-                    if (for_not_linear(x, y, cx, cy, r, a1, a2)) {{
-                        return true;
-                    }}
+                    l = get_total_not_linear(r, a1, a2);
+                    xy = for_not_linear(x, y, cx, cy, r, a1, a2);
                     i += 6u;
                 }}
+                if (verify_in_bounds(xy, l)) {{
+                    return verify_texture(xy, passed_body_height);
+                }}
+                passed_body_height += l;
             }}
             return false;
         }}
@@ -845,7 +872,10 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
         1024,
         TARGET_TEXTURE_WIDTH as f32,
         TARGET_TEXTURE_HEIGHT as f32,
-        12.0 * crate::MONKEY_SCALING * 0.5
+        crate::BODY_SEMI_W_TO_DRAW,
+        crate::BODY_START_Y,
+        crate::BODY_CENTER_X,
+        crate::PX_SCREEN_TO_MONKEY_TEXTURE,
     ))?; // TODO
 
     let program_climbing_body = link_program(&context, &vert_shader_climbing_body, &frag_shader_climbing_body)?;
@@ -876,6 +906,8 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     context.uniform1i(background_texture_index_body.as_ref(), 1);
     let ina_texture_index_body = context.get_uniform_location(&program_climbing_body, "ina");
     context.uniform1i(ina_texture_index_body.as_ref(), 2);
+    let monkey_texture_index_body = context.get_uniform_location(&program_climbing_body, "monkey_image");
+    context.uniform1i(monkey_texture_index_body.as_ref(), 3);
     let height_on_tree_index_body = context.get_uniform_location(&program_climbing_body, "heightOnTree");
 
     

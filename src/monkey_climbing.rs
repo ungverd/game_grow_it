@@ -1,8 +1,8 @@
 use web_sys::{WebGl2RenderingContext, WebGlBuffer};
-pub const DELTAX_FRONT: f32 = 3.0; //px
+pub const DELTAX_FRONT: f32 = 2.5; //px
 pub const DELTAX_BACK: f32 = 3.0; //px
-pub const DELTAY_FRONT: f32 = 10.0; //px
-pub const DELTAY_BACK: f32 = 10.0; //px
+pub const DELTAY_FRONT: f32 = 9.0; //px
+pub const DELTAY_BACK: f32 = 9.0; //px
 pub const LEG_SEGMENT_LENGTH: f32 = 10.0; //px
 pub const ARM_SEGMENT_LENGTH: f32 = 9.0; //px
 pub const ARM_WIDTH_START: f32 = 4.0; //px
@@ -23,7 +23,6 @@ const TAIL_FRAMEHEIGHT: f32 = 48.0; //px
 const TAIL_DELTAX_START: f32 = 6.0; //px
 const TAIL_X_CENTER: f32 = TAIL_FRAMEWIDTH / 2.0; //px
 const TAIL_DELTAY_BOTTOM: f32 = TAIL_FRAMEHEIGHT - TAIL_FULLEN - TAIL_DELTAY;
-const IMAGE_SIDE: f32 = 1024.0; //px
 const HEAD_WIDTH: f32 = 15.0 * crate::MONKEY_SCALING; //px
 const HEAD_HEIGHT: f32 = 15.0 * crate::MONKEY_SCALING; //px
 const BUTT_WIDTH: f32 = 15.0 * crate::MONKEY_SCALING; //px
@@ -336,13 +335,13 @@ impl crate::TreeStruct {
 
 impl MonkeyClimbing {
     pub fn new() -> MonkeyClimbing {
-        let mut texture_arr = [261.0 / IMAGE_SIDE; 180]; // 261, 261 is "not transparent" point on monkey texture
-        let head_x1 = 426.0 / IMAGE_SIDE;
-        let head_x2 = 441.0 / IMAGE_SIDE;
-        let head_y1 = 954.0 / IMAGE_SIDE;
-        let head_y2 = 969.0 / IMAGE_SIDE;
-        let butt_y1 = 950.0 / IMAGE_SIDE;
-        let butt_y2 = 954.0 / IMAGE_SIDE;
+        let mut texture_arr = [261.0 / crate::IMAGE_SIDE; 180]; // 261, 261 is "not transparent" point on monkey texture
+        let head_x1 = 426.0 / crate::IMAGE_SIDE;
+        let head_x2 = 441.0 / crate::IMAGE_SIDE;
+        let head_y1 = 954.0 / crate::IMAGE_SIDE;
+        let head_y2 = 969.0 / crate::IMAGE_SIDE;
+        let butt_y1 = 950.0 / crate::IMAGE_SIDE;
+        let butt_y2 = 954.0 / crate::IMAGE_SIDE;
         // x1y2___________x2y2
         //  |  \ xxxxxx    |
         //  |  xxx\xxxxxx  |
@@ -673,19 +672,19 @@ impl crate::TreeStruct {
         let deltax_from_start_to_p1 = TAIL_X_CENTER + deltax_from_center;
         let deltay_from_start_to_p1;
         if flip_horizontal {
-            x1 = o2x / IMAGE_SIDE;
-            x2 = o1x / IMAGE_SIDE;
+            x1 = o2x / crate::IMAGE_SIDE;
+            x2 = o1x / crate::IMAGE_SIDE;
         } else {
-            x1 = o1x / IMAGE_SIDE;
-            x2 = o2x / IMAGE_SIDE;
+            x1 = o1x / crate::IMAGE_SIDE;
+            x2 = o2x / crate::IMAGE_SIDE;
         }
         if flip_vertical {
-            y1 = o2y / IMAGE_SIDE;
-            y2 = o1y / IMAGE_SIDE;
+            y1 = o2y / crate::IMAGE_SIDE;
+            y2 = o1y / crate::IMAGE_SIDE;
             deltay_from_start_to_p1 = TAIL_DELTAY_BOTTOM;
         } else {
-            y1 = o1y / IMAGE_SIDE;
-            y2 = o2y / IMAGE_SIDE;
+            y1 = o1y / crate::IMAGE_SIDE;
+            y2 = o2y / crate::IMAGE_SIDE;
             deltay_from_start_to_p1 = TAIL_DELTAY;
         }
         let uv_triangles = [
@@ -910,7 +909,7 @@ impl crate::TreeStruct {
 }
 
 fn get_points_original(row: usize, col: usize) -> (f32, f32, f32, f32) {
-    let p0x = IMAGE_SIDE - (TAIL_COLUMNS as f32) * TAIL_FRAMEWIDTH;
+    let p0x = crate::IMAGE_SIDE - (TAIL_COLUMNS as f32) * TAIL_FRAMEWIDTH;
     let p0y = 0.0;
     let o1x = p0x + TAIL_FRAMEWIDTH * (col as f32);
     let o2x = p0x + TAIL_FRAMEWIDTH * ((col + 1) as f32);
