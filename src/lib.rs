@@ -120,6 +120,8 @@ struct TreeStruct {
     y_start: f32,
     monkey_climbing: monkey_climbing::MonkeyClimbing,
     tree_index: usize,
+    body_params_vec: Vec<f32>,
+    body_quad: [f32; 12],
 }
 
 impl TreeStruct {
@@ -134,6 +136,8 @@ impl TreeStruct {
             y_start,
             monkey_climbing: monkey_climbing::MonkeyClimbing::new(),
             tree_index,
+            body_params_vec: vec![],
+            body_quad: [0.0; 12]
         }
     }
 
@@ -453,12 +457,12 @@ impl GameState {
         self.context.use_program(self.monkey_climbing_program_body.as_ref());
         self.context.bind_vertex_array(self.monkey_vao_climbing_body.as_ref());
         self.context.uniform1f(self.height_index_body.as_ref(), height);
-        let body_quad = tree_struct.set_params_body_climbing_and_return_quad(
+        tree_struct.set_params_body_climbing(
             &self.context,
             (self.ubo_buffer_climbing_body.as_ref()).unwrap());
         gl_related::apply_array_climbing_body(
             &self.context,
-            &body_quad,
+            &tree_struct.body_quad,
             self.monkey_position_buffer_climbing_body.as_ref());
         gl_related::draw(&self.context, 6, false, 0);
         Ok(())

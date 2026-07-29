@@ -492,7 +492,16 @@ impl crate::TreeStruct {
             self.populate_limb_triangles(i, is_arm, is_left, start);
         }
         self.set_head_butt();
-        self.monkey_climbing.finish_and_update_to_screen_coords_arrays_climbing()
+        self.monkey_climbing.finish_and_update_to_screen_coords_arrays_climbing();
+        self.create_body_params_vec_and_quad();
+        crate::log("quad");
+        for el in &self.body_quad {
+            crate::log(&format!("{:?}", el));
+        }
+        crate::log("param");
+        for el in &self.body_params_vec {
+            crate::log(&format!("{:?}", el));
+        }
     }
 
     fn get_pos_angle_extrapolate(&self, height: f32) -> (crate::Pos, f32) {
@@ -779,44 +788,44 @@ impl crate::TreeStruct {
         self.monkey_climbing.vertex_arr[144..168].copy_from_slice(&arr);
     }
 
-    fn create_body_params_vec_and_quad(&self) -> (Vec<f32>, [f32; 12]) {
+    fn create_body_params_vec_and_quad(&mut self) {
         let height_up = self.monkey_climbing.total_height + DELTAY_FRONT;
         let height_down = self.monkey_climbing.total_height - DELTAY_BACK;
-        let mut body_params_vec: Vec<f32> = vec![0.0]; // placeholder value
+        self.body_params_vec = vec![0.0]; // placeholder value
         if height_down < 0.0 {
-            body_params_vec.push(-1.0);
+            self.body_params_vec.push(-1.0);
             let cx = self.x_start;
             let cy = self.y_start + height_down;
             let alp = 0.0;
             let l = -height_down;
-            body_params_vec.push(cx);
-            body_params_vec.push(cy);
-            body_params_vec.push(alp);
-            body_params_vec.push(l);
+            self.body_params_vec.push(cx);
+            self.body_params_vec.push(cy);
+            self.body_params_vec.push(alp);
+            self.body_params_vec.push(l);
         }
-        for segment in &self.tree_for_climbing {
-            self.monkey_body_add_segment(&mut body_params_vec, segment, height_up, height_down);
+        for segment_num in 0..self.tree_for_climbing.len() {
+            self.monkey_body_add_segment(segment_num, height_up, height_down);
         }
         let last_el = self.tree_for_climbing.last().unwrap();
         let tree_len = last_el.dist_from_root_start + last_el.length;
         if height_up > tree_len {
-            body_params_vec.push(-1.0);
+            self.body_params_vec.push(-1.0);
             let (pstart, angle_start) = self.get_pos_angle_extrapolate(tree_len);
-            body_params_vec.push(pstart.x);
-            body_params_vec.push(pstart.y);
-            body_params_vec.push(angle_start);
-            body_params_vec.push(height_up - tree_len);
+            self.body_params_vec.push(pstart.x);
+            self.body_params_vec.push(pstart.y);
+            self.body_params_vec.push(angle_start);
+            self.body_params_vec.push(height_up - tree_len);
         }
-        let total = body_params_vec.len() as f32;
-        body_params_vec[0] = total;
+        let total = self.body_params_vec.len() as f32;
+        self.body_params_vec[0] = total;
 
         let pos_center = &self.monkey_climbing.body_pos;
-        let delta = if DELTAY_BACK > DELTAX_FRONT {DELTAY_BACK} else {DELTAY_FRONT} + 2.0;
+        let delta = if DELTAY_BACK > DELTAY_FRONT {DELTAY_BACK} else {DELTAY_FRONT} + 3.0;
         let x1 = (pos_center.x - delta) * 2.0 / crate::CANVAS_REF_WIDTH - 1.0;
         let x2 = (pos_center.x + delta) * 2.0 / crate::CANVAS_REF_WIDTH - 1.0;
         let y1 = (pos_center.y - delta) * 2.0 / crate::CANVAS_REF_HEIGHT - 1.0;
         let y2 = (pos_center.y + delta) * 2.0 / crate::CANVAS_REF_HEIGHT - 1.0;
-        let body_quad = [
+        self.body_quad = [
             x1, y1,
             x1, y2,
             x2, y2,
@@ -824,15 +833,14 @@ impl crate::TreeStruct {
             x2, y1,
             x2, y2,
         ];
-        return (body_params_vec, body_quad);
     }
 
     fn monkey_body_add_segment(
-        &self,
-        body_params_vec: &mut Vec<f32>,
-        segment: &TreeElForClimbing,
+        &mut self,
+        segment_num: usize,
         height_up: f32,
         height_down: f32) {
+        let segment = &self.tree_for_climbing[segment_num];
         let segment_start = segment.dist_from_root_start;
         if height_up < segment_start {
             return;
@@ -853,10 +861,10 @@ impl crate::TreeStruct {
         }
         match &segment.for_not_linear {
             Some(not_linear) => {
-                body_params_vec.push(1.0);
-                body_params_vec.push(not_linear.center_x);
-                body_params_vec.push(not_linear.center_y);
-                body_params_vec.push(not_linear.radius.abs());
+                self.body_params_vec.push(1.0);
+                self.body_params_vec.push(not_linear.center_x);
+                self.body_params_vec.push(not_linear.center_y);
+                self.body_params_vec.push(not_linear.radius.abs());
                 let angle_stop;
                 if segment_stop > height_up {
                     (_, angle_stop) = self.get_pos_angle_extrapolate(height_up);
@@ -872,30 +880,29 @@ impl crate::TreeStruct {
                     converted_angle_start = PI + angle_start;
                     converted_angle_stop = PI + angle_stop;
                 }
-                body_params_vec.push(converted_angle_start);
-                body_params_vec.push(converted_angle_stop);
+                self.body_params_vec.push(converted_angle_start);
+                self.body_params_vec.push(converted_angle_stop);
             }
             None => {
-                body_params_vec.push(-1.0);
+                self.body_params_vec.push(-1.0);
                 let (pstart, _) = self.get_pos_angle_extrapolate(part_start);
-                body_params_vec.push(pstart.x);
-                body_params_vec.push(pstart.y);
-                body_params_vec.push(angle_start);
-                body_params_vec.push(part_stop - part_start);
+                self.body_params_vec.push(pstart.x);
+                self.body_params_vec.push(pstart.y);
+                self.body_params_vec.push(angle_start);
+                self.body_params_vec.push(part_stop - part_start);
             }
         }
     }
 
-    pub fn set_params_body_climbing_and_return_quad(
+    pub fn set_params_body_climbing(
         &self,
         context: &WebGl2RenderingContext,
         ubo_buffer_climbing_body: &WebGlBuffer,
-        ) -> [f32; 12] {
-        let (body_params_vec, body_quad) = self.create_body_params_vec_and_quad();
-        let vec_len = body_params_vec.len();
+        ) {
+        let vec_len = self.body_params_vec.len();
         let new_len = ((vec_len as f64 / 4.0).ceil() * 4.0) as usize;
         let mut tot_arr = [0.0; 100];
-        tot_arr[0..vec_len].copy_from_slice(&body_params_vec);
+        tot_arr[0..vec_len].copy_from_slice(&self.body_params_vec);
         context.bind_buffer(WebGl2RenderingContext::UNIFORM_BUFFER, Some(&ubo_buffer_climbing_body));
         unsafe {
             let rects_array_buf_view = js_sys::Float32Array::view(&tot_arr[0..new_len]);
@@ -906,7 +913,6 @@ impl crate::TreeStruct {
                 &rects_array_buf_view,
             );
         }
-        return body_quad;
     }
 }
 
