@@ -23,10 +23,10 @@ const TAIL_FRAMEHEIGHT: f32 = 48.0; //px
 const TAIL_DELTAX_START: f32 = 6.0; //px
 const TAIL_X_CENTER: f32 = TAIL_FRAMEWIDTH / 2.0; //px
 const TAIL_DELTAY_BOTTOM: f32 = TAIL_FRAMEHEIGHT - TAIL_FULLEN - TAIL_DELTAY;
-const HEAD_WIDTH: f32 = 15.0 * crate::MONKEY_SCALING; //px
-const HEAD_HEIGHT: f32 = 15.0 * crate::MONKEY_SCALING; //px
-const BUTT_WIDTH: f32 = 15.0 * crate::MONKEY_SCALING; //px
-const BUTT_HEIGHT: f32 = 4.0 * crate::MONKEY_SCALING; //px
+const HEAD_WIDTH: f32 = 22.0 * crate::CLIMBING_SCALING; //px
+const HEAD_HEIGHT: f32 = 23.0 * crate::CLIMBING_SCALING; //px
+const BUTT_WIDTH: f32 = 22.0 * crate::CLIMBING_SCALING; //px
+const BUTT_HEIGHT: f32 = 5.0 * crate::CLIMBING_SCALING; //px
 
 
 const PI: f32 = std::f32::consts::PI;
@@ -336,12 +336,14 @@ impl crate::TreeStruct {
 impl MonkeyClimbing {
     pub fn new() -> MonkeyClimbing {
         let mut texture_arr = [261.0 / crate::IMAGE_SIDE; 180]; // 261, 261 is "not transparent" point on monkey texture
-        let head_x1 = 426.0 / crate::IMAGE_SIDE;
-        let head_x2 = 441.0 / crate::IMAGE_SIDE;
-        let head_y1 = 954.0 / crate::IMAGE_SIDE;
-        let head_y2 = 969.0 / crate::IMAGE_SIDE;
-        let butt_y1 = 950.0 / crate::IMAGE_SIDE;
-        let butt_y2 = 954.0 / crate::IMAGE_SIDE;
+        let head_x1 = 994.0 / crate::IMAGE_SIDE;
+        let head_x2 = 1016.0 / crate::IMAGE_SIDE;
+        let head_y1 = 534.0 / crate::IMAGE_SIDE;
+        let head_y2 = 511.0 / crate::IMAGE_SIDE;
+        let butt_x1 = 994.0 / crate::IMAGE_SIDE;
+        let butt_x2 = 1016.0 / crate::IMAGE_SIDE;
+        let butt_y1 = 574.0 / crate::IMAGE_SIDE;
+        let butt_y2 = 569.0 / crate::IMAGE_SIDE;
         // x1y2___________x2y2
         //  |  \ xxxxxx    |
         //  |  xxx\xxxxxx  |
@@ -356,12 +358,12 @@ impl MonkeyClimbing {
             head_x2, head_y2,
             head_x2, head_y1,
 
-            head_x1, butt_y2,
-            head_x1, butt_y1,
-            head_x2, butt_y1,
-            head_x1, butt_y2,
-            head_x2, butt_y2,
-            head_x2, butt_y1];
+            butt_x1, butt_y2,
+            butt_x1, butt_y1,
+            butt_x2, butt_y1,
+            butt_x1, butt_y2,
+            butt_x2, butt_y2,
+            butt_x2, butt_y1];
         texture_arr[144..168].copy_from_slice(&head_butt_arr);
         MonkeyClimbing{
             total_height: 0.0,
