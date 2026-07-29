@@ -200,18 +200,18 @@ impl crate::TreeStruct {
         self.tree_for_climbing = tree_for_climbing;
     }
 
-    pub fn monkey_on_animation_frame(&mut self, deltat: f32, v: f32) {
+    pub fn monkey_on_animation_frame(&mut self, deltat: f32) {
         let mut new_height;
         if !self.monkey_climbing.on_goal {
             if self.monkey_climbing.goal_height > self.monkey_climbing.total_height {
-                new_height = self.monkey_climbing.total_height + deltat * v;
+                new_height = self.monkey_climbing.total_height + deltat * CLIMBING_SPEED;
                 if new_height >= self.monkey_climbing.goal_height {
                     new_height = self.monkey_climbing.goal_height;
                     self.monkey_climbing.on_goal = true;
                 }
             }
             else {
-                new_height = self.monkey_climbing.total_height - deltat * v;
+                new_height = self.monkey_climbing.total_height - deltat * CLIMBING_SPEED;
                 if new_height <= self.monkey_climbing.goal_height {
                     new_height = self.monkey_climbing.goal_height;
                     self.monkey_climbing.on_goal = true;

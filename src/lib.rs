@@ -538,8 +538,7 @@ impl GameState {
                 let tree_num = self.monkey.climbing_num;
                 let now_tree = &mut self.tree_structs[tree_num];
                 //let v = self.monkey.running.parameters.v;
-                let v = 50.0;
-                now_tree.monkey_on_animation_frame(deltat, v);
+                now_tree.monkey_on_animation_frame(deltat);
                 let now_tree = & self.tree_structs[tree_num];
                 if now_tree.monkey_climbing.on_goal {
                     match &self.monkey.monkey_goal {
