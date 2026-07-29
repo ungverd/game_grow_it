@@ -494,14 +494,6 @@ impl crate::TreeStruct {
         self.set_head_butt();
         self.monkey_climbing.finish_and_update_to_screen_coords_arrays_climbing();
         self.create_body_params_vec_and_quad();
-        crate::log("quad");
-        for el in &self.body_quad {
-            crate::log(&format!("{:?}", el));
-        }
-        crate::log("param");
-        for el in &self.body_params_vec {
-            crate::log(&format!("{:?}", el));
-        }
     }
 
     fn get_pos_angle_extrapolate(&self, height: f32) -> (crate::Pos, f32) {
