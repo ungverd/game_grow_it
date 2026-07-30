@@ -122,6 +122,7 @@ struct TreeStruct {
     tree_index: usize,
     body_params_vec: Vec<f32>,
     body_quad: [f32; 12],
+    climbing_history: monkey_climbing::ClimbingHistory,
 }
 
 impl TreeStruct {
@@ -137,7 +138,8 @@ impl TreeStruct {
             monkey_climbing: monkey_climbing::MonkeyClimbing::new(),
             tree_index,
             body_params_vec: vec![],
-            body_quad: [0.0; 12]
+            body_quad: [0.0; 12],
+            climbing_history: monkey_climbing::ClimbingHistory::new(),
         }
     }
 
@@ -529,7 +531,7 @@ impl GameState {
                             let now_tree = &mut self.tree_structs[tree_goal.tree_index];
                             now_tree.monkey_climbing.set_goal(tree_goal.tree_height);
                             now_tree.monkey_climbing.on_goal = false;
-                            now_tree.set_monkey_height(monkey_climbing::MIN_DIST_FROM_ROOT);
+                            now_tree.set_monkey_on_start(monkey_climbing::MIN_DIST_FROM_ROOT);
                         }
                     }
                 }

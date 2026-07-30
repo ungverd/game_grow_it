@@ -1,4 +1,6 @@
 use web_sys::{WebGl2RenderingContext, WebGlBuffer};
+use std::collections::VecDeque;
+
 pub const DELTAX_FRONT: f32 = 2.5; //px
 pub const DELTAX_BACK: f32 = 3.0; //px
 pub const DELTAY_FRONT: f32 = 9.0; //px
@@ -27,7 +29,10 @@ const HEAD_WIDTH: f32 = 22.0 * crate::CLIMBING_SCALING; //px
 const HEAD_HEIGHT: f32 = 23.0 * crate::CLIMBING_SCALING; //px
 const BUTT_WIDTH: f32 = 22.0 * crate::CLIMBING_SCALING; //px
 const BUTT_HEIGHT: f32 = 5.0 * crate::CLIMBING_SCALING; //px
-
+const ANGLE_MAX: f32 = 0.4; // radian
+const TAIL_SEGMENTS: usize = 20;
+const SEGMENT_DELTA_T: f32 = 0.05; // seconds
+const TIME_AT_START: f32 = -SEGMENT_DELTA_T * (TAIL_SEGMENTS as f32);
 
 const PI: f32 = std::f32::consts::PI;
 pub const W: f32 = crate::DEST_REF as f32; // three width in px
@@ -82,6 +87,81 @@ pub struct TreeUnitReduced {
     left: u32,
 }
 
+struct ClimbingHistoryEl {
+    start_t: f32,
+    start_angle: f32,
+    angle_vel: f32,
+}
+
+pub struct ClimbingHistory {
+    deque: VecDeque<ClimbingHistoryEl>,
+    prev_tail_segnum: i32,
+}
+
+impl ClimbingHistory {
+    pub fn new() -> ClimbingHistory {
+        let first_el = ClimbingHistoryEl{
+            start_t: TIME_AT_START,
+            start_angle: 0.0,
+            angle_vel: 0.0,
+        };
+        ClimbingHistory {deque: VecDeque::from([first_el]), prev_tail_segnum: 0}
+    }
+
+    fn new_with_params(start_angle: f32, angle_vel: f32, tail_segnum: i32) -> ClimbingHistory {
+        let first_el = ClimbingHistoryEl{
+            start_t: TIME_AT_START,
+            start_angle,
+            angle_vel,
+        };
+        ClimbingHistory {deque: VecDeque::from([first_el]), prev_tail_segnum: tail_segnum}
+    }
+
+    fn get_angle(&self, t: f32) -> f32 {
+        for el in self.deque.iter().rev() {
+            if t >= el.start_t {
+                let now_t = t - el.start_t;
+                return el.start_angle - PI*0.5 + el.angle_vel * now_t;
+            }
+        }
+        return 0.0; // we must not be here
+    }
+
+    fn add_at_rest(&mut self, start_t: f32, now_angle: f32) {
+        let new_el = ClimbingHistoryEl{
+            start_t,
+            start_angle: now_angle,
+            angle_vel: 0.0,
+        };
+        self.deque.push_back(new_el);
+    }
+
+    fn add_at_movement(&mut self, start_t: f32, start_angle: f32, angle_vel: f32) {
+        let new_el = ClimbingHistoryEl{
+            start_t,
+            start_angle,
+            angle_vel,
+        };
+        self.deque.push_back(new_el);
+    }
+
+    fn find_number_to_remove(&self, time_limit: f32) -> i32 {
+        let mut counter = 0;
+        for el in &self.deque {
+            if el.start_t > time_limit {return if counter - 1 > 0 {counter - 1} else {0};}
+            counter += 1;
+        }
+        return 0;
+    }
+
+    fn remove_too_old(&mut self, now_t: f32) {
+        let time_limit = now_t + TIME_AT_START;
+        let number_to_remove = self.find_number_to_remove(time_limit);
+        for _ in 0..number_to_remove {
+            self.deque.pop_front();
+        }
+    }
+}
 
 impl crate::TreeStruct {
     fn make_joined_tree(&mut self) {
@@ -222,8 +302,24 @@ impl crate::TreeStruct {
         }
     }
 
-    pub fn set_monkey_height(&mut self, height: f32) {
+    pub fn set_monkey_on_start(&mut self, height: f32) {
         self.monkey_climbing.total_height = height;
+        self.monkey_climbing.tail_time = 0.0;
+        let tail_height = height - DELTAY_BACK - LEG_WIDTH_START * 0.5;
+        let tree_len = self.tree_for_climbing.len();
+        let (_, start_angle, tail_segnum) = self.get_pos_angle_segnum_extrapolate(tail_height);
+        let angle_vel;
+        if self.monkey_climbing.on_goal {
+            angle_vel = 0.0;
+        } else {
+            if tail_segnum < 0 || tail_segnum >= tree_len as i32{
+                angle_vel = 0.0;
+            } else {
+                let segment = &self.tree_for_climbing[tail_segnum as usize];
+                angle_vel = segment.get_radial_velosity();
+            }
+        }
+        self.climbing_history = ClimbingHistory::new_with_params(start_angle, angle_vel, tail_segnum);
         self.update_monkey_based_on_height();
     }
 
@@ -439,7 +535,7 @@ impl crate::TreeStruct {
              y,
              _actual_dist_from_root) = self.get_segment_x_y_dist_from_root_body(adjusted_dist_from_root, actual_segment_num);
         self.monkey_climbing.total_height = adjusted_dist_from_root;
-        
+
         let body_pos = crate::Pos{x, y};
         self.monkey_climbing.body_pos = body_pos;
         self.monkey_climbing.now_segment = final_actual_segment_num;
@@ -496,14 +592,16 @@ impl crate::TreeStruct {
         self.create_body_params_vec_and_quad();
     }
 
-    fn get_pos_angle_extrapolate(&self, height: f32) -> (crate::Pos, f32) {
+    fn get_pos_angle_segnum_extrapolate(&self, height: f32) -> (crate::Pos, f32, i32) {
         let x;
         let y;
         let angle;
+        let segnum;
         if height <= 0.0 {
             x = self.x_start;
             y = self.y_start + height;
             angle = 0.0;
+            segnum = -1;
         } else {
             let last_segment = self.tree_for_climbing.last().unwrap();
             let tree_total_length = last_segment.dist_from_root_start + last_segment.length;
@@ -519,6 +617,7 @@ impl crate::TreeStruct {
                 }
                 x = last_segment.end_x - dif_height * angle.sin();
                 y = last_segment.end_y + dif_height * angle.cos();
+                segnum = self.tree_for_climbing.len() as i32;
             } else {
                 let segment_num = self.monkey_climbing.now_segment;
                 let actual_segment_num;
@@ -540,14 +639,15 @@ impl crate::TreeStruct {
                         angle = angle_start + (angle_stop - angle_start) * height_dif / length;
                     }
                 }
+                segnum = actual_segment_num as i32;
             }
         }
-        (crate::Pos{x, y}, angle)
+        (crate::Pos{x, y}, angle, segnum)
     }
     
     fn get_x_y_start_limb(&self, deltay: f32, deltax: f32) -> crate::Pos {
         let height_start = self.monkey_climbing.total_height + deltay;
-        let (pos_center, angle) = self.get_pos_angle_extrapolate(height_start);
+        let (pos_center, angle, _) = self.get_pos_angle_segnum_extrapolate(height_start);
         let x = pos_center.x + deltax * angle.cos();
         let y = pos_center.y + deltax * angle.sin();
         return crate::Pos{x, y};
@@ -659,76 +759,15 @@ impl crate::TreeStruct {
     }
 
     pub fn update_tail(&mut self, deltat: f32) { // deltat in seconds
-        self.monkey_climbing.tail_time = (self.monkey_climbing.tail_time + deltat) % TAIL_PERIOD;
-        let tail_i = (self.monkey_climbing.tail_time * (TAIL_FRAMES as f32) / TAIL_PERIOD).floor() as usize;
-        let (row,
-             col,
-             flip_horizontal,
-             flip_vertical) = get_ninframes_row_col_fliph_flipv(tail_i);
-        let angle_start = (tail_i as f32) * PI * 2.0 / (TAIL_FRAMES as f32);
-        let deltax_from_center = angle_start.cos() * TAIL_DELTAX_START;
-        let (o1x, o2x, o1y, o2y) = get_points_original(row, col);
-        let x1;
-        let x2;
-        let y1;
-        let y2;
-        let deltax_from_start_to_p1 = TAIL_X_CENTER + deltax_from_center;
-        let deltay_from_start_to_p1;
-        if flip_horizontal {
-            x1 = o2x / crate::IMAGE_SIDE;
-            x2 = o1x / crate::IMAGE_SIDE;
-        } else {
-            x1 = o1x / crate::IMAGE_SIDE;
-            x2 = o2x / crate::IMAGE_SIDE;
+        self.monkey_climbing.tail_time = self.monkey_climbing.tail_time + deltat;
+        let tail_height = self.monkey_climbing.total_height - DELTAY_BACK - LEG_WIDTH_START * 0.5;
+        let tree_len = self.tree_for_climbing.len();
+        let (start_pos, start_angle, tail_segnum) = self.get_pos_angle_segnum_extrapolate(tail_height);
+        if tail_segnum != self.climbing_history.prev_tail_segnum {
+            // add segment
         }
-        if flip_vertical {
-            y1 = o2y / crate::IMAGE_SIDE;
-            y2 = o1y / crate::IMAGE_SIDE;
-            deltay_from_start_to_p1 = TAIL_DELTAY_BOTTOM;
-        } else {
-            y1 = o1y / crate::IMAGE_SIDE;
-            y2 = o2y / crate::IMAGE_SIDE;
-            deltay_from_start_to_p1 = TAIL_DELTAY;
-        }
-        let uv_triangles = [
-            x1, y1,
-            x2, y1,
-            x2, y2,
-            x1, y1,
-            x1, y2,
-            x2, y2];
-        self.monkey_climbing.texture_arr[168..180].copy_from_slice(&uv_triangles);
-        let tail_start_h = self.monkey_climbing.total_height - DELTAY_BACK - LEG_WIDTH_START * 0.5;
-        let (pos_tail_start, angle) = self.get_pos_angle_extrapolate(tail_start_h);
-        let deltax_render = deltax_from_start_to_p1 * crate::MONKEY_SCALING;
-        let deltay_render = deltay_from_start_to_p1 * crate::MONKEY_SCALING;
-        // both these deltax and deltay are positive
-        // P1-----P2
-        // |start |
-        // |      |
-        // |      |
-        // |      |
-        // P3-----P4
-        let p1_x = pos_tail_start.x - deltax_render * angle.cos() - deltay_render * angle.sin();
-        let p1_y = pos_tail_start.y - deltax_render * angle.sin() + deltay_render * angle.cos();
-        let width_render = TAIL_FRAMEWIDTH * crate::MONKEY_SCALING;
-        let height_render = TAIL_FRAMEHEIGHT * crate::MONKEY_SCALING;
-        let p2_x = p1_x + width_render * angle.cos();
-        let p2_y = p1_y + width_render * angle.sin();
-        let p3_x = p1_x + height_render * angle.sin();
-        let p3_y = p1_y - height_render * angle.cos();
-        let p4_x = p3_x + width_render * angle.cos();
-        let p4_y = p3_y + width_render * angle.sin();
-        let pos_triangles = [
-            p1_x, p1_y,
-            p2_x, p2_y,
-            p4_x, p4_y,
-            p1_x, p1_y,
-            p3_x, p3_y,
-            p4_x, p4_y
-        ];
-        self.monkey_climbing.vertex_arr[168..180].copy_from_slice(&pos_triangles);
-        self.monkey_climbing.convert_vert_arr_to_screen_coords(168, 180);
+        // if started or stopped movement - add segment
+        
     }
 
     fn set_head_butt(&mut self) {
@@ -742,7 +781,7 @@ impl crate::TreeStruct {
             P2, P1, P4,
             P2, P3, P4];*/
         let head_h = self.monkey_climbing.total_height + DELTAY_FRONT - 0.5;
-        let (head_start, angle) = self.get_pos_angle_extrapolate(head_h);
+        let (head_start, angle, _) = self.get_pos_angle_segnum_extrapolate(head_h);
         let p1_x = head_start.x - HEAD_WIDTH*0.5 * angle.cos();
         let p1_y = head_start.y - HEAD_WIDTH*0.5 * angle.sin();
         let p2_x = p1_x - HEAD_HEIGHT * angle.sin();
@@ -753,7 +792,7 @@ impl crate::TreeStruct {
         let p4_y = p3_y - HEAD_HEIGHT * angle.cos();
 
         let butt_h = self.monkey_climbing.total_height - DELTAY_BACK + 0.2;
-        let (butt_start, angle) = self.get_pos_angle_extrapolate(butt_h);
+        let (butt_start, angle, _) = self.get_pos_angle_segnum_extrapolate(butt_h);
         let b2_x = butt_start.x - BUTT_WIDTH*0.5 * angle.cos();
         let b2_y = butt_start.y - BUTT_WIDTH*0.5 * angle.sin();
         let b3_x = b2_x + BUTT_WIDTH * angle.cos();
@@ -802,7 +841,7 @@ impl crate::TreeStruct {
         let tree_len = last_el.dist_from_root_start + last_el.length;
         if height_up > tree_len {
             self.body_params_vec.push(-1.0);
-            let (pstart, angle_start) = self.get_pos_angle_extrapolate(tree_len);
+            let (pstart, angle_start, _) = self.get_pos_angle_segnum_extrapolate(tree_len);
             self.body_params_vec.push(pstart.x);
             self.body_params_vec.push(pstart.y);
             self.body_params_vec.push(angle_start);
@@ -849,7 +888,7 @@ impl crate::TreeStruct {
             angle_start = segment.angle_start;
         } else {
             part_start = height_down;
-            (_, angle_start) = self.get_pos_angle_extrapolate(height_down);
+            (_, angle_start, _) = self.get_pos_angle_segnum_extrapolate(height_down);
         }
         match &segment.for_not_linear {
             Some(not_linear) => {
@@ -859,7 +898,7 @@ impl crate::TreeStruct {
                 self.body_params_vec.push(not_linear.radius.abs());
                 let angle_stop;
                 if segment_stop > height_up {
-                    (_, angle_stop) = self.get_pos_angle_extrapolate(height_up);
+                    (_, angle_stop, _) = self.get_pos_angle_segnum_extrapolate(height_up);
                 } else {
                     angle_stop = not_linear.angle_stop;
                 }
@@ -877,7 +916,7 @@ impl crate::TreeStruct {
             }
             None => {
                 self.body_params_vec.push(-1.0);
-                let (pstart, _) = self.get_pos_angle_extrapolate(part_start);
+                let (pstart, _, _) = self.get_pos_angle_segnum_extrapolate(part_start);
                 self.body_params_vec.push(pstart.x);
                 self.body_params_vec.push(pstart.y);
                 self.body_params_vec.push(angle_start);
@@ -1305,6 +1344,15 @@ impl TreeElForClimbing {
             }
         }
     }
+
+    fn get_radial_velosity(&self) -> f32 {
+        match &self.for_not_linear {
+            None => {return 0.0;}
+            Some(not_linear) => {
+                return CLIMBING_SPEED / not_linear.radius;
+            }
+        }
+    }
 }
 
 impl crate::TreeStruct {
@@ -1455,5 +1503,11 @@ impl crate::TreeStruct {
             }
         }
         return None;
+    }
+
+    fn get_angle(&self, t: f32) -> f32 {
+        let basic_angle = (t / TAIL_PERIOD * (2.0 * PI)).sin() * ANGLE_MAX;
+        let add_angle = self.climbing_history.get_angle(t);
+        basic_angle + add_angle
     }
 }
