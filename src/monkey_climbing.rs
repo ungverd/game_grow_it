@@ -1,5 +1,5 @@
 use web_sys::{WebGl2RenderingContext, WebGlBuffer};
-use std::collections::VecDeque;
+use std::{collections::VecDeque, hint::select_unpredictable};
 
 pub const DELTAX_FRONT: f32 = 2.5; //px
 pub const DELTAX_BACK: f32 = 3.0; //px
@@ -56,6 +56,7 @@ pub struct MonkeyClimbing {
     pub vertex_arr: [f32; 180],
     pub texture_arr: [f32; 180],
     pub tail_time: f32,
+    goal_just_set: bool,
 }
 
 struct TreeElForClimbingNotLinear {
@@ -96,6 +97,7 @@ struct ClimbingHistoryEl {
 pub struct ClimbingHistory {
     deque: VecDeque<ClimbingHistoryEl>,
     prev_tail_segnum: i32,
+    prev_on_goal: bool,
 }
 
 impl ClimbingHistory {
@@ -105,16 +107,28 @@ impl ClimbingHistory {
             start_angle: 0.0,
             angle_vel: 0.0,
         };
-        ClimbingHistory {deque: VecDeque::from([first_el]), prev_tail_segnum: 0}
+        ClimbingHistory {
+            deque: VecDeque::from([first_el]),
+            prev_tail_segnum: 0,
+            prev_on_goal: false,
+        }
     }
 
-    fn new_with_params(start_angle: f32, angle_vel: f32, tail_segnum: i32) -> ClimbingHistory {
+    fn new_with_params(
+        start_angle: f32,
+        angle_vel: f32,
+        tail_segnum: i32,
+        prev_on_goal: bool) -> ClimbingHistory {
         let first_el = ClimbingHistoryEl{
             start_t: TIME_AT_START,
             start_angle,
             angle_vel,
         };
-        ClimbingHistory {deque: VecDeque::from([first_el]), prev_tail_segnum: tail_segnum}
+        ClimbingHistory {
+            deque: VecDeque::from([first_el]),
+            prev_tail_segnum: tail_segnum,
+            prev_on_goal,
+        }
     }
 
     fn get_angle(&self, t: f32) -> f32 {
@@ -319,7 +333,11 @@ impl crate::TreeStruct {
                 angle_vel = segment.get_radial_velosity();
             }
         }
-        self.climbing_history = ClimbingHistory::new_with_params(start_angle, angle_vel, tail_segnum);
+        self.climbing_history = ClimbingHistory::new_with_params(
+            start_angle,
+            angle_vel,
+            tail_segnum,
+            self.monkey_climbing.on_goal);
         self.update_monkey_based_on_height();
     }
 
@@ -471,11 +489,13 @@ impl MonkeyClimbing {
             vertex_arr: [0.0; 180],
             texture_arr,
             tail_time: 0.0,
+            goal_just_set: false,
         }
     }
     pub fn set_goal(&mut self, goal: f32) {
         self.goal_height = goal;
         self.on_goal = false;
+        self.goal_just_set = true;
     }
 
     pub fn convert_vert_arr_to_screen_coords(&mut self, start: usize, stop: usize) {
@@ -762,11 +782,70 @@ impl crate::TreeStruct {
         self.monkey_climbing.tail_time = self.monkey_climbing.tail_time + deltat;
         let tail_height = self.monkey_climbing.total_height - DELTAY_BACK - LEG_WIDTH_START * 0.5;
         let tree_len = self.tree_for_climbing.len();
-        let (start_pos, start_angle, tail_segnum) = self.get_pos_angle_segnum_extrapolate(tail_height);
+        let (pos, angle, tail_segnum) = self.get_pos_angle_segnum_extrapolate(tail_height);
         if tail_segnum != self.climbing_history.prev_tail_segnum {
             // add segment
+            let delta_h;
+            let angle_vel;
+            let start_angle;
+            if tail_segnum > self.climbing_history.prev_tail_segnum {
+                let start_segment_h;
+                if tail_segnum == tree_len as i32 {
+                    let last = self.tree_for_climbing.last().unwrap();
+                    start_segment_h = last.dist_from_root_start + last.length;
+                    angle_vel = 0.0;
+                    match &last.for_not_linear {
+                        None => {
+                            start_angle = last.angle_start;
+                        }
+                        Some(not_linear) => {
+                            start_angle = not_linear.angle_stop;
+                        }
+                    }
+                } else {
+                    let segment = &self.tree_for_climbing[tail_segnum as usize];
+                    start_segment_h = segment.dist_from_root_start;
+                    angle_vel = segment.get_radial_velosity();
+                    start_angle = segment.angle_start;
+                }
+                delta_h = tail_height - start_segment_h;
+            } else {
+                let end_segment_h;
+                if tail_segnum < 0 {
+                    end_segment_h = 0.0;
+                    angle_vel = 0.0;
+                    start_angle = 0.0;
+                } else {
+                    let segment = &self.tree_for_climbing[tail_segnum as usize];
+                    end_segment_h = segment.dist_from_root_start + segment.length;
+                    angle_vel = -segment.get_radial_velosity();
+                    match &segment.for_not_linear {
+                        None => {
+                            start_angle = segment.angle_start;
+                        }
+                        Some(not_linear) => {
+                            start_angle = not_linear.angle_stop;
+                        }
+                    }
+                }
+                delta_h = end_segment_h - tail_height;
+            }
+            let delta_t = delta_h * CLIMBING_SPEED;
+            let start_t = self.monkey_climbing.tail_time - delta_t;
+            self.climbing_history.prev_tail_segnum = tail_segnum;
+            self.climbing_history.add_at_movement(start_t, start_angle, angle_vel);
         }
-        // if started or stopped movement - add segment
+        if !self.climbing_history.prev_on_goal && self.monkey_climbing.on_goal { // monkey just stopped
+            let now_angle = angle;
+            let start_t = self.monkey_climbing.tail_time;
+            self.climbing_history.add_at_rest(start_t, now_angle);
+        }
+        self.climbing_history.prev_on_goal = self.monkey_climbing.on_goal;
+
+        // There's also adding segment on click (in set_goal)
+        if self.monkey_climbing.goal_just_set {
+            self.monkey_climbing.goal_just_set = false;
+        }
         
     }
 
