@@ -31,6 +31,11 @@ const BUTT_WIDTH: f32 = 22.0 * crate::CLIMBING_SCALING; //px
 const BUTT_HEIGHT: f32 = 5.0 * crate::CLIMBING_SCALING; //px
 const ANGLE_MAX: f32 = 0.4; // radian
 const TAIL_SEGMENTS: usize = 20;
+const TAIL_LEN: f32 = 40.0; //px
+const TAIL_WIDTH: f32 = 4.0; //px
+const TAIL_SEGMENT_LEN: f32 = TAIL_LEN / (TAIL_SEGMENTS as f32);
+const TAIL_COORDS_NUM: usize = (TAIL_SEGMENTS * 6 + (TAIL_SEGMENTS - 1) * 3 + 3 * 3 * 2) * 2; 
+                    // rectangles           triangles at joints   caps at ends
 const SEGMENT_DELTA_T: f32 = 0.05; // seconds
 const TIME_AT_START: f32 = -SEGMENT_DELTA_T * (TAIL_SEGMENTS as f32);
 
@@ -53,8 +58,8 @@ pub struct MonkeyClimbing {
     left_arm_right_arm_left_leg_right_leg: [crate::Pos; 4],
     goal_height: f32,
     pub on_goal: bool,
-    pub vertex_arr: [f32; 180],
-    pub texture_arr: [f32; 180],
+    pub vertex_arr: [f32; 174 + TAIL_COORDS_NUM],
+    pub texture_arr: [f32; 174 + TAIL_COORDS_NUM],
     pub tail_time: f32,
     goal_just_set: bool,
 }
@@ -449,7 +454,7 @@ impl crate::TreeStruct {
 
 impl MonkeyClimbing {
     pub fn new() -> MonkeyClimbing {
-        let mut texture_arr = [261.0 / crate::IMAGE_SIDE; 180]; // 261, 261 is "not transparent" point on monkey texture
+        let mut texture_arr = [261.0 / crate::IMAGE_SIDE; 174 + TAIL_COORDS_NUM]; // 261, 261 is "not transparent" point on monkey texture
         let head_x1 = 994.0 / crate::IMAGE_SIDE;
         let head_x2 = 1016.0 / crate::IMAGE_SIDE;
         let head_y1 = 534.0 / crate::IMAGE_SIDE;
@@ -486,7 +491,7 @@ impl MonkeyClimbing {
             left_arm_right_arm_left_leg_right_leg: [crate::Pos::new(), crate::Pos::new(), crate::Pos::new(), crate::Pos::new()],
             goal_height: 0.0,
             on_goal: false,
-            vertex_arr: [0.0; 180],
+            vertex_arr: [0.0; 174 + TAIL_COORDS_NUM],
             texture_arr,
             tail_time: 0.0,
             goal_just_set: false,
@@ -845,8 +850,62 @@ impl crate::TreeStruct {
         // There's also adding segment on click (in set_goal)
         if self.monkey_climbing.goal_just_set {
             self.monkey_climbing.goal_just_set = false;
+            let now_angle = angle;
+            let start_t = self.monkey_climbing.tail_time;
+            let sens_multiplier = if self.monkey_climbing.total_height > self.monkey_climbing.goal_height {1.0} else {-1.0};
+            // positive if goal is higher then monkey, negative otherwise
+            
+            let angle_vel;
+            if tail_segnum == tree_len as i32 {
+                angle_vel = 0.0;
+            } else {
+                if tail_segnum == 0 {
+                    angle_vel = 0.0;
+                } else {
+                    let segment = &self.tree_for_climbing[tail_segnum as usize];
+                    angle_vel = sens_multiplier * segment.get_radial_velosity();
+                }
+            }
+            self.climbing_history.add_at_movement(start_t, now_angle, angle_vel);
+            let mut segment_start_x = pos.x;
+            let mut segment_start_y = pos.y;
+            let mut tail_t = self.monkey_climbing.tail_time;
+            let mut angle = self.get_angle(tail_t);
+            let semiwidth = TAIL_WIDTH * 0.5;
+
+            // p1___________p2
+            // |\---_____   |
+            // p3________--\p4
+
+            let mut p1x = segment_start_x - semiwidth * angle.sin();
+            let mut p1y = segment_start_y + semiwidth * angle.cos();
+            let mut p2x = segment_start_x + semiwidth * angle.sin();
+            let mut p2y = segment_start_y - semiwidth * angle.cos();
+            let mut start_pos = self.monkey_climbing.vertex_arr.len() - TAIL_COORDS_NUM;
+            for i in 0..TAIL_SEGMENTS {
+                tail_t -= SEGMENT_DELTA_T;
+                let segment_end_x = segment_start_x + TAIL_SEGMENT_LEN * angle.cos();
+                let segment_end_y = segment_start_y + TAIL_SEGMENT_LEN * angle.sin();
+                let p3x = segment_end_x - semiwidth * angle.sin();
+                let p3y = segment_end_y + semiwidth * angle.cos();
+                let p4x = segment_end_x + semiwidth * angle.sin();
+                let p4y = segment_end_y - semiwidth * angle.cos();
+                let arr = [
+                    p1x, p1y, p2x, p2y, p4x, p4y,
+                    p1x, p1y, p3x, p3y, p4x, p4y];
+                self.monkey_climbing.vertex_arr[start_pos..start_pos + 12].copy_from_slice(&arr);
+                start_pos += 12;
+                if i < TAIL_SEGMENTS - 1 {
+                    let next_angle = self.get_angle(tail_t);
+                    // TODO: triangle
+                    angle = next_angle;
+                    p1x = segment_end_x - semiwidth * angle.sin();
+                    p1y = segment_end_y + semiwidth * angle.cos();
+                    p2x = segment_end_x + semiwidth * angle.sin();
+                    p2y = segment_end_y - semiwidth * angle.cos();
+                }
+            }
         }
-        
     }
 
     fn set_head_butt(&mut self) {
