@@ -14,7 +14,7 @@ pub const LEG_WIDTH_START: f32 = 5.0; //px
 pub const LEG_WIDTH_MID: f32 = 3.25; //px
 pub const LEG_WIDTH_END: f32 = 2.5; //px
 pub const MIN_DIST_FROM_ROOT: f32 = 5.0; //px, must be less then W * PI / 6 / 2
-const TAIL_PERIOD: f32 = 2.0; //seconds
+const TAIL_PERIOD: f32 = 1.7; //seconds
 const HEAD_WIDTH: f32 = 22.0 * crate::CLIMBING_SCALING; //px
 const HEAD_HEIGHT: f32 = 23.0 * crate::CLIMBING_SCALING; //px
 const BUTT_WIDTH: f32 = 22.0 * crate::CLIMBING_SCALING; //px
@@ -26,7 +26,7 @@ const TAIL_WIDTH: f32 = 3.5; //px
 const TAIL_SEGMENT_LEN: f32 = TAIL_LEN / (TAIL_SEGMENTS as f32);
 const TAIL_COORDS_NUM: usize = (TAIL_SEGMENTS * 6 + (TAIL_SEGMENTS - 1) * 3 + 2 * 3 * 2) * 2; 
                     // rectangles           triangles at joints   caps at ends
-const SEGMENT_DELTA_T: f32 = 0.07; // seconds
+const SEGMENT_DELTA_T: f32 = 0.04; // seconds
 const TIME_AT_START: f32 = -SEGMENT_DELTA_T * (TAIL_SEGMENTS as f32);
 
 const PI: f32 = std::f32::consts::PI;
