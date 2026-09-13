@@ -54,24 +54,24 @@ pub struct MonkeyClimbing {
     goal_just_set: bool,
 }
 
-struct TreeElForClimbingNotLinear {
-    center_x: f32,
-    center_y: f32,
-    radius: f32,
-    angle_stop: f32,
+pub struct TreeElForClimbingNotLinear {
+    pub center_x: f32,
+    pub center_y: f32,
+    pub radius: f32,
+    pub angle_stop: f32,
 }
 
 pub struct TreeElForClimbing {
-    angle_start: f32,
+    pub angle_start: f32,
     dist_from_root_start: f32,
-    length: f32,
-    start_x: f32,
-    start_y: f32,
+    pub length: f32,
+    pub start_x: f32,
+    pub start_y: f32,
     end_x: f32,
     end_y: f32,
-    right: u32,
-    left: u32,
-    for_not_linear: Option<TreeElForClimbingNotLinear>,
+    pub right: u32,
+    pub left: u32,
+    pub for_not_linear: Option<TreeElForClimbingNotLinear>,
     arm_dist: f32,
     leg_dist: f32,
     step: f32, // each step, monkey's center does this dist, and moving limb does 2x this

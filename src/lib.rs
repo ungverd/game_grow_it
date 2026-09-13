@@ -5,6 +5,7 @@ mod tree;
 mod gl_related;
 mod monkey_running;
 mod monkey_climbing;
+mod tree_contours;
 
 pub const MAX_RECTS: usize = 1024;
 pub const BUF_LENGTH: usize = MAX_RECTS * 4;
@@ -62,6 +63,7 @@ pub struct TreeUnit {
 }
 
 #[derive(Debug)]
+#[derive(Clone)]
 struct Pos {
     x: f32,
     y: f32,
@@ -603,4 +605,182 @@ fn get_straight_extended_length() -> (f32, f32) {
     let deltay_arm = get_circle_vertical_intersection(r_arm_extended, deltax_arm); 
     let deltay_leg = get_circle_vertical_intersection(r_leg_extended, deltax_leg);
     (deltay_arm + monkey_climbing::DELTAY_FRONT, monkey_climbing::DELTAY_BACK + deltay_leg)
+}
+
+impl Pos {
+    fn add(&self, other: &Pos) -> Pos {
+        Pos {
+            x: self.x + other.x,
+            y: self.y + other.y
+        }
+    }
+
+    fn multiply(&self, multiplier: f32) -> Pos {
+        Pos {
+            x: self.x * multiplier,
+            y: self.y * multiplier
+        }
+    }
+
+    fn scalar_multiply(&self, other: &Pos) -> f32 {
+        return self.x * other.x + self.y * other.y;
+    }
+
+    fn distance_squared(&self, other: &Pos) -> f32 {
+        let dif = self.add(&other.multiply(-1.0));
+        dif.scalar_multiply(&dif) 
+    }
+
+    fn distance(&self, other: &Pos) -> f32 {
+        self.distance_squared(other).sqrt()
+    }
+
+    fn cross_product(&self, other: &Pos) -> f32 {
+        self.x * other.y - self.y * other.x
+    }
+}
+
+impl tree_contours::Figure {
+    fn new(segment: &monkey_climbing::TreeElForClimbing) -> tree_contours::Figure {
+        match &segment.for_not_linear {
+            None => {
+                let p_start = Pos {
+                    x: segment.start_x,
+                    y: segment.start_y,
+                };
+                let delta_hor = Pos {
+                    x: segment.angle_start.cos(),
+                    y: segment.angle_start.sin()
+                }.multiply((DEST_REF as f32) / 2.0);
+                let delta_vert = Pos {
+                    x: -segment.angle_start.sin(),
+                    y: segment.angle_start.cos()
+                }.multiply(segment.length);
+                let p_end = p_start.add(&delta_vert);
+                let minus_delta_hor = delta_hor.multiply(-1.0);
+                let p0 = p_start.add(&minus_delta_hor);
+                let p1 = p_end.add(&minus_delta_hor);
+                let p2 = p_end.add(&delta_hor);
+                let p3 = p_start.add(&delta_hor);
+                let points = vec![p0, p1, p2, p3];
+                let mut lines = vec![];
+                for i in 0..4 {
+                    let i1 = (i + 1) % 4;
+                    let line = tree_contours::LineSegment::new(
+                        points[i as usize].clone(), points[i1 as usize].clone()
+                    );
+                    let el = tree_contours::Line::Segment(line);
+                    lines.push(el);
+                }
+                let contour_complex = tree_contours::ContourComplex::new (
+                    lines,
+                    points,
+                );
+                let contour = tree_contours::Contour::new_from_complex(
+                    contour_complex);
+                return tree_contours::Figure::new_from_contours(vec![contour]);
+            }
+            Some(not_linear) => {
+                let center = Pos{x: not_linear.center_x, y: not_linear.center_y};
+                if ((segment.right as i32) - (segment.left as i32)).abs() >= 12 {
+                    // circle(s)
+                    if segment.right == 0 || segment.left == 0 {
+                        let circle = tree_contours::Circle::new(
+                            center,
+                            DEST_REF as f32,
+                            true,
+                        );
+                        let contour = tree_contours::Contour::new_from_circle(
+                            circle);
+                        return tree_contours::Figure::new_from_contours(vec![contour]);
+                    } else {
+                        let inner_radius = not_linear.radius.abs() - (DEST_REF as f32) * 0.5;
+                        let outer_radius = not_linear.radius.abs() + (DEST_REF as f32) * 0.5;
+                        let circle_inner = tree_contours::Circle::new(
+                            center.clone(),
+                            inner_radius,
+                            false,
+                        );
+                        let contour_inner = tree_contours::Contour::new_from_circle(
+                            circle_inner,
+                        );
+                        let circle_outer = tree_contours::Circle::new(
+                            center,
+                            outer_radius,
+                            true,
+                        );
+                        let contour_outer = tree_contours::Contour::new_from_circle(
+                            circle_outer,
+                        );
+                        return tree_contours::Figure::new_from_contours(vec![contour_inner, contour_outer]);
+                    }
+                } else {
+                    // arc
+                    let angle_start;
+                    let angle_stop;
+                    if segment.right > segment.left {
+                        angle_start = segment.angle_start;
+                        angle_stop = not_linear.angle_stop;
+                    } else {
+                        angle_start = not_linear.angle_stop + std::f32::consts::PI * 0.5;
+                        angle_stop = segment.angle_start + std::f32::consts::PI * 0.5;
+                    }
+                    let unit_start = Pos{
+                        x: angle_start.cos(),
+                        y: angle_start.sin(),
+                    };
+                    let unit_stop = Pos{
+                        x: angle_stop.cos(),
+                        y: angle_stop.sin(),
+                    };
+                    let lines;
+                    let points;
+                    if segment.right == 0 || segment.left == 0 {
+                        let radius = DEST_REF as f32;
+                        let dif_start = unit_start.multiply(radius);
+                        let dif_stop = unit_stop.multiply(radius);
+                        let p1 = center.add(&dif_start);
+                        let p2 = center.add(&dif_stop);
+                        let line1 = tree_contours::LineSegment::new(center.clone(), p1.clone());
+                        let arc = tree_contours::Arc::new(center.clone(), radius, angle_start, angle_stop);
+                        let line2 = tree_contours::LineSegment::new(p2.clone(), center.clone());
+                        let line1 = tree_contours::Line::Segment(line1);
+                        let arc = tree_contours::Line::Arc(arc);
+                        let line2 = tree_contours::Line::Segment(line2);
+                        lines = vec![line1, arc, line2];
+                        points = vec![center, p1, p2];
+                    } else {
+                        let inner_radius = not_linear.radius.abs() - (DEST_REF as f32) * 0.5;
+                        let outer_radius = not_linear.radius.abs() + (DEST_REF as f32) * 0.5;
+                        let dif_start_inner = unit_start.multiply(inner_radius);
+                        let dif_stop_inner = unit_stop.multiply(inner_radius);
+                        let p1 = center.add(&dif_start_inner);
+                        let p4 = center.add(&dif_stop_inner);
+                        let dif_start_outer = unit_start.multiply(outer_radius);
+                        let dif_stop_outer = unit_stop.multiply(outer_radius);
+                        let p2 = center.add(&dif_start_outer);
+                        let p3 = center.add(&dif_stop_outer);
+                        let line1 = tree_contours::LineSegment::new(p1.clone(), p2.clone());
+                        let line3 = tree_contours::LineSegment::new(p3.clone(), p4.clone());
+                        let arc2 = tree_contours::Arc::new(center.clone(), outer_radius, angle_start, angle_stop);
+                        let arc4 = tree_contours::Arc::new(center.clone(), inner_radius, angle_stop, angle_start);
+                        let line1 = tree_contours::Line::Segment(line1);
+                        let line3 = tree_contours::Line::Segment(line3);
+                        let arc2 = tree_contours::Line::Arc(arc2);
+                        let arc4 = tree_contours::Line::Arc(arc4);
+                        lines = vec![line1, arc2, line3, arc4];
+                        points = vec![p1, p2, p3, p4];
+                    }
+                    let contour_complex = tree_contours::ContourComplex::new (
+                        lines,
+                        points,
+                    );
+                    let contour = tree_contours::Contour::new_from_complex(
+                        contour_complex,
+                        true);
+                    return tree_contours::Figure::new_from_contours(vec![contour]);
+                }
+            }
+        }
+    }
 }
