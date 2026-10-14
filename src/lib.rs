@@ -776,8 +776,7 @@ impl tree_contours::Figure {
                         points,
                     );
                     let contour = tree_contours::Contour::new_from_complex(
-                        contour_complex,
-                        true);
+                        contour_complex);
                     return tree_contours::Figure::new_from_contours(vec![contour]);
                 }
             }
