@@ -1,4 +1,6 @@
-const MIN_DELTA: f32 = 0.00001;
+use std::f32::MIN;
+
+const MIN_DELTA: f32 = 0.001;
 
 pub struct LineSegment {
     point1: crate::Pos,
@@ -187,17 +189,42 @@ impl FigureIntermediate {
     } 
 }
 
-fn check_same_point(p1: &crate::Pos, p2: &crate::Pos) {
+fn check_same_point(p1: &crate::Pos, p2: &crate::Pos) -> bool {
     let dif = p1.add(&p2.multiply(-1.0));
+    dif.x.abs() < MIN_DELTA && dif.y.abs() < MIN_DELTA
+}
+
+fn get_y(x1: f32, x2: f32, y1: f32, y2: f32, r1: f32, r2: f32) -> Option<(f32, f32)> {
+    let a = 4. * ((y1 - y2).powi(2) + (x1 - x2).powi(2));
+    let b = (-4.) * ((y1 - y2) * (y1.powi(2) - y2.powi(2) - r1.powi(2) + r2.powi(2)) + (y1 + y2) * (x1 + x2).powi(2));
+    let c = ((y1.powi(2) - r1.powi(2)) - (x1 - x2).powi(2) - (y2.powi(2) - r2.powi(2))).powi(2) + 4. * (y1.powi(2) - r1.powi(2)) * (x1 - x2).powi(2);
+    let d = b.powi(2) - 4.*a*c;
+    if d >= 0.0 {
+        let d_root = d.powf(0.5);
+        let y_1 = (-b + d_root) / 2. / a;
+        let y_2 = (-b - d_root) / 2. / a;
+        Some((y_1, y_2))
+    } else {
+        None
+    }
 }
 
 fn check_intersect_circle_circle(c1: &crate::Pos, c2: &crate::Pos, r1: f32, r2: f32) {
+    // we assume here that centers are not same point
+    let res = get_y(c1.x, c2.x, c1.y, c2.y, r1, r2);
+    match res {
+        None => {}
+        Some((y_1, y_2)) => {
+            
+        }
+    }
 
 }
 
 fn check_intersect_arc_arc(arc1: &Arc, arc2: &Arc) {
-    if ((arc1.center.x - arc2.center.x).abs() > MIN_DELTA || (arc1.center.y - arc2.center.y).abs() > MIN_DELTA) {
-        // We don't do anything here if centers are the same point: that will be circle-circle or lines
+    if check_same_point(&arc1.center, &arc2.center) {
+
+    } else {
 
     }
 }
