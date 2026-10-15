@@ -205,17 +205,48 @@ fn get_y(x1: f32, x2: f32, y1: f32, y2: f32, r1: f32, r2: f32) -> Option<(f32, f
         let y_2 = (-b - d_root) / 2. / a;
         Some((y_1, y_2))
     } else {
-        None
+        if d.abs() < MIN_DELTA {
+            let y_1 = (-b) / 2. / a;
+            let y_2 = y_1;
+            Some((y_1, y_2))
+        } else {
+            None
+        }
     }
 }
 
-fn check_intersect_circle_circle(c1: &crate::Pos, c2: &crate::Pos, r1: f32, r2: f32) {
+fn get_x(x1: f32, x2: f32, y1: f32, y2: f32, r1: f32, r2: f32) -> Option<(f32, f32)> {
+    get_y(y1, y2, x1, x2, r1, r2)
+}
+
+enum CircleIntersectionResult {
+    None,
+    OnePoint(crate::Pos),
+    TwoPoints((crate::Pos, crate::Pos))
+}
+
+fn intersect_circle_circle(c1: &crate::Pos, c2: &crate::Pos, r1: f32, r2: f32) -> CircleIntersectionResult {
     // we assume here that centers are not same point
     let res = get_y(c1.x, c2.x, c1.y, c2.y, r1, r2);
     match res {
-        None => {}
-        Some((y_1, y_2)) => {
-            
+        None => {CircleIntersectionResult::None}
+        Some((y_big, y_small)) => {
+            let res2 = get_x(c1.x, c2.x, c1.y, c2.y, r1, r2);
+            let (x_big, x_small) = res2.unwrap();
+            let res_p1;
+            let res_p2;
+            if (c1.x > c2.x) == (c1.y > c2.y) {
+                res_p1 = crate::Pos{x: x_big, y: y_small};
+                res_p2 = crate::Pos{x: x_small, y: y_big};
+            } else {
+                res_p1 = crate::Pos{x: x_big, y: y_big};
+                res_p2 = crate::Pos{x: x_small, y: y_small};
+            }
+            if check_same_point(&res_p1, &res_p2) {
+                CircleIntersectionResult::OnePoint(res_p1)
+            } else {
+                CircleIntersectionResult::TwoPoints((res_p1, res_p2))
+            }
         }
     }
 
