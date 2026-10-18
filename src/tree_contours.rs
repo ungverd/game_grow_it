@@ -194,35 +194,69 @@ fn check_same_point(p1: &crate::Pos, p2: &crate::Pos) -> bool {
     dif.x.abs() < MIN_DELTA && dif.y.abs() < MIN_DELTA
 }
 
-fn get_y(x1: f32,
-         x2: f32,
-         y1: f32,
-         y2: f32,
-         r1: f32,
-         r2: f32,
-         we_have_point: bool) -> Option<(f32, f32)> {
+fn get_y_circles(x1: f32,
+                 x2: f32,
+                 y1: f32,
+                 y2: f32,
+                 r1: f32,
+                 r2: f32) -> Option<(f32, f32)> {
     let a = 4. * ((y1 - y2).powi(2) + (x1 - x2).powi(2));
     let b = (-4.) * ((y1 - y2) * (y1.powi(2) - y2.powi(2) - r1.powi(2) + r2.powi(2)) + (y1 + y2) * (x1 + x2).powi(2));
     let c = ((y1.powi(2) - r1.powi(2)) - (x1 - x2).powi(2) - (y2.powi(2) - r2.powi(2))).powi(2) + 4. * (y1.powi(2) - r1.powi(2)) * (x1 - x2).powi(2);
     let d = b.powi(2) - 4.*a*c;
-    if d >= 0.0 {
+    if d > 0.0 {
         let d_root = d.powf(0.5);
         let y_1 = (-b + d_root) / 2. / a;
         let y_2 = (-b - d_root) / 2. / a;
         Some((y_1, y_2))
     } else {
-        if d.abs() < MIN_DELTA || we_have_point {
-            let y_1 = (-b) / 2. / a;
-            let y_2 = y_1;
-            Some((y_1, y_2))
+        if d.abs() < MIN_DELTA {
+            let y_1 = -b / 2. / a;
+            Some((y_1, y_1))
         } else {
             None
         }
     }
 }
 
-fn get_x(x1: f32, x2: f32, y1: f32, y2: f32, r1: f32, r2: f32) -> (f32, f32) {
-    get_y(y1, y2, x1, x2, r1, r2, true).unwrap()
+fn get_x_circles(x1: f32, x2: f32, y1: f32, y2: f32, r1: f32, r2: f32) -> Option<(f32, f32)> {
+    get_y_circles(y1, y2, x1, x2, r1, r2)
+}
+
+fn get_y_circle_line(x1: f32,
+                     x2: f32,
+                     xc: f32,
+                     y1: f32,
+                     y2: f32,
+                     yc: f32,
+                     r: f32) -> Option<(f32, f32)> {
+    let dify = y2 - y1;
+    let difx = x2 - x1;
+    let dify2 = dify.powi(2);
+    let difx2 = difx.powi(2);
+    let xy_expr = y1 * x2 - y2 * x1 + xc * dify;
+    let a = dify2 + difx2;
+    let b = -2. * (yc * dify2 + difx * xy_expr);
+    let c = yc.powi(2) * dify2 + xy_expr.powi(2) - r.powi(2) * dify2;
+    let d = b.powi(2) - 4. * a * c;
+
+    if d > 0. {
+        let d_sqrt = d.powf(0.5);
+        let y_1 = (-b + d_sqrt) / 2. / a;
+        let y_2 = (-b - d_sqrt) / 2. / a;
+        Some((y_1, y_2))
+    } else {
+        if d.abs() < MIN_DELTA {
+            let y_1 = -b / 2. / a;
+            Some((y_1, y_1))
+        } else {
+            None
+        }
+    }
+}
+
+fn get_x_circle_line(x1: f32, x2: f32, xc: f32, y1: f32, y2: f32, yc: f32, r: f32) -> Option<(f32, f32)> {
+    get_y_circle_line(y1, y2, yc, x1, x2, xc, r)
 }
 
 enum CircleIntersectionResult {
@@ -233,29 +267,61 @@ enum CircleIntersectionResult {
 
 fn intersect_circle_circle(c1: &crate::Pos, c2: &crate::Pos, r1: f32, r2: f32) -> CircleIntersectionResult {
     // we assume here that centers are not same point
-    let res = get_y(c1.x, c2.x, c1.y, c2.y, r1, r2, false);
+    let res = get_y_circles(c1.x, c2.x, c1.y, c2.y, r1, r2);
     match res {
         None => {CircleIntersectionResult::None}
         Some((y_big, y_small)) => {
-            let res2 = get_x(c1.x, c2.x, c1.y, c2.y, r1, r2);
-            let (x_big, x_small) = res2;
-            let res_p1;
-            let res_p2;
-            if (c1.x > c2.x) == (c1.y > c2.y) {
-                res_p1 = crate::Pos{x: x_big, y: y_small};
-                res_p2 = crate::Pos{x: x_small, y: y_big};
-            } else {
-                res_p1 = crate::Pos{x: x_big, y: y_big};
-                res_p2 = crate::Pos{x: x_small, y: y_small};
-            }
-            if check_same_point(&res_p1, &res_p2) {
-                CircleIntersectionResult::OnePoint(res_p1)
-            } else {
-                CircleIntersectionResult::TwoPoints((res_p1, res_p2))
+            let res2 = get_x_circles(c1.x, c2.x, c1.y, c2.y, r1, r2);
+            match res2 {
+                None => {CircleIntersectionResult::None}
+                Some((x_big, x_small)) => {
+                    let res_p1;
+                    let res_p2;
+                    if (c1.x > c2.x) == (c1.y > c2.y) {
+                        res_p1 = crate::Pos{x: x_big, y: y_small};
+                        res_p2 = crate::Pos{x: x_small, y: y_big};
+                    } else {
+                        res_p1 = crate::Pos{x: x_big, y: y_big};
+                        res_p2 = crate::Pos{x: x_small, y: y_small};
+                    }
+                    if check_same_point(&res_p1, &res_p2) {
+                        CircleIntersectionResult::OnePoint(res_p1)
+                    } else {
+                        CircleIntersectionResult::TwoPoints((res_p1, res_p2))
+                    }
+                }
             }
         }
     }
+}
 
+fn intersect_circle_line(c: &crate::Pos, r: f32, p1: &crate::Pos, p2: &crate::Pos) -> CircleIntersectionResult {
+    let res = get_y_circle_line(p1.x, p2.x, c.x, p1.y, p2.y, c.y, r);
+    match res {
+        None => {CircleIntersectionResult::None}
+        Some((y_big, y_small)) => {
+            let res2 = get_x_circle_line(p1.x, p2.x, c.x, p1.y, p2.y, c.y, r);
+            match res2 {
+                None => {CircleIntersectionResult::None}
+                Some((x_big, x_small)) => {
+                    let res_p1;
+                    let res_p2;
+                    if (p1.x > p2.x) != (p1.y > p2.y) {
+                        res_p1 = crate::Pos{x: x_big, y: y_small};
+                        res_p2 = crate::Pos{x: x_small, y: y_big};
+                    } else {
+                        res_p1 = crate::Pos{x: x_big, y: y_big};
+                        res_p2 = crate::Pos{x: x_small, y: y_small};
+                    }
+                    if check_same_point(&res_p1, &res_p2) {
+                        CircleIntersectionResult::OnePoint(res_p1)
+                    } else {
+                        CircleIntersectionResult::TwoPoints((res_p1, res_p2))
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn check_intersect_arc_arc(arc1: &Arc, arc2: &Arc) {
