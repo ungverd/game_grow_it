@@ -4,11 +4,11 @@ use web_sys::{WebGl2RenderingContext, WebGlBuffer, WebGlFramebuffer, WebGlProgra
 pub const TARGET_TEXTURE_WIDTH: i32 = 600;
 pub const TARGET_TEXTURE_HEIGHT: i32 = 600;
 
-pub fn get_context_and_canvas_width() -> Result<(WebGl2RenderingContext, f32), JsValue> {
+pub fn get_context_and_canvas_width() -> Result<(WebGl2RenderingContext, f64), JsValue> {
     let document = web_sys::window().unwrap().document().unwrap();
     let canvas = document.get_element_by_id("canvas").unwrap();
     let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
-    let canvas_width = canvas.width() as f32;
+    let canvas_width = canvas.width() as f64;
     let context = canvas
         .get_context("webgl2")?
         .unwrap()
@@ -95,12 +95,14 @@ pub fn prepare_gl(img: web_sys::HtmlImageElement,
     );
     context.enable_vertex_attrib_array(position_attribute_location as u32);
 
+    let canvas_ref_width = crate::CANVAS_REF_WIDTH as f32;
+    let canvas_ref_height = crate::CANVAS_REF_HEIGHT as f32;
     let texture_coords: [f32; 12] = [0.0, 0.0, 
-                                     crate::CANVAS_REF_WIDTH, 0.0,
-                                     0.0, crate::CANVAS_REF_HEIGHT,
-                                     crate::CANVAS_REF_WIDTH, 0.0,
-                                     crate::CANVAS_REF_WIDTH, crate::CANVAS_REF_HEIGHT,
-                                     0.0, crate::CANVAS_REF_HEIGHT];                     
+                                     canvas_ref_width, 0.0,
+                                     0.0, canvas_ref_height,
+                                     canvas_ref_width, 0.0,
+                                     canvas_ref_width, canvas_ref_height,
+                                     0.0, canvas_ref_height];                     
     let tex_coord_attribute_location = context.get_attrib_location(&program, "a_texCoord");
     //crate::log(&format!("tex_coord {:?}", tex_coord_attribute_location));
     let tex_coord_buffer = context.create_buffer().ok_or("Failed to create buffer")?;
@@ -235,7 +237,7 @@ pub fn prepare_gl(img: web_sys::HtmlImageElement,
                                  Some(&texture_to_buffer),
                                  level);
 
-    // texture with a (f32)
+    // texture with a (f64)
     let texture_to_buffer2 = context.create_texture().expect("Cannot create gl texture");
     let level = 0;
     //let internal_format = WebGl2RenderingContext::R32F;
@@ -564,7 +566,7 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     );
     context.enable_vertex_attrib_array(position_attribute_location as u32);
 
-    /*let texture_coords: [f32; 12] = [0.0, 0.0, 
+    /*let texture_coords: [f64; 12] = [0.0, 0.0, 
                                      1.0, 0.0,
                                      0.0, 1.0,
                                      1.0, 0.0,

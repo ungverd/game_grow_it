@@ -1,39 +1,39 @@
 use web_sys::{WebGl2RenderingContext, WebGlBuffer};
 use std::{collections::VecDeque};
 
-pub const DELTAX_FRONT: f32 = 2.5; //px
-pub const DELTAX_BACK: f32 = 3.0; //px
-pub const DELTAY_FRONT: f32 = 9.0; //px
-pub const DELTAY_BACK: f32 = 9.0; //px
-pub const LEG_SEGMENT_LENGTH: f32 = 10.0; //px
-pub const ARM_SEGMENT_LENGTH: f32 = 9.0; //px
-pub const ARM_WIDTH_START: f32 = 4.0; //px
-pub const ARM_WIDTH_MID: f32 = 3.0; //px
-pub const ARM_WIDTH_END: f32 = 2.0; //px
-pub const LEG_WIDTH_START: f32 = 5.0; //px
-pub const LEG_WIDTH_MID: f32 = 3.25; //px
-pub const LEG_WIDTH_END: f32 = 2.5; //px
-pub const MIN_DIST_FROM_ROOT: f32 = 5.0; //px, must be less then W * PI / 6 / 2
-const TAIL_PERIOD: f32 = 1.7; //seconds
-const HEAD_WIDTH: f32 = 22.0 * crate::CLIMBING_SCALING; //px
-const HEAD_HEIGHT: f32 = 23.0 * crate::CLIMBING_SCALING; //px
-const BUTT_WIDTH: f32 = 22.0 * crate::CLIMBING_SCALING; //px
-const BUTT_HEIGHT: f32 = 5.0 * crate::CLIMBING_SCALING; //px
-const ANGLE_MAX: f32 = 0.4; // radian
+pub const DELTAX_FRONT: f64 = 2.5; //px
+pub const DELTAX_BACK: f64 = 3.0; //px
+pub const DELTAY_FRONT: f64 = 9.0; //px
+pub const DELTAY_BACK: f64 = 9.0; //px
+pub const LEG_SEGMENT_LENGTH: f64 = 10.0; //px
+pub const ARM_SEGMENT_LENGTH: f64 = 9.0; //px
+pub const ARM_WIDTH_START: f64 = 4.0; //px
+pub const ARM_WIDTH_MID: f64 = 3.0; //px
+pub const ARM_WIDTH_END: f64 = 2.0; //px
+pub const LEG_WIDTH_START: f64 = 5.0; //px
+pub const LEG_WIDTH_MID: f64 = 3.25; //px
+pub const LEG_WIDTH_END: f64 = 2.5; //px
+pub const MIN_DIST_FROM_ROOT: f64 = 5.0; //px, must be less then W * PI / 6 / 2
+const TAIL_PERIOD: f64 = 1.7; //seconds
+const HEAD_WIDTH: f64 = 22.0 * crate::CLIMBING_SCALING; //px
+const HEAD_HEIGHT: f64 = 23.0 * crate::CLIMBING_SCALING; //px
+const BUTT_WIDTH: f64 = 22.0 * crate::CLIMBING_SCALING; //px
+const BUTT_HEIGHT: f64 = 5.0 * crate::CLIMBING_SCALING; //px
+const ANGLE_MAX: f64 = 0.4; // radian
 const TAIL_SEGMENTS: usize = 18;
-const TAIL_LEN: f32 = 36.0; //px
-const TAIL_WIDTH: f32 = 3.5; //px
-const TAIL_SEGMENT_LEN: f32 = TAIL_LEN / (TAIL_SEGMENTS as f32);
+const TAIL_LEN: f64 = 36.0; //px
+const TAIL_WIDTH: f64 = 3.5; //px
+const TAIL_SEGMENT_LEN: f64 = TAIL_LEN / (TAIL_SEGMENTS as f64);
 const TAIL_COORDS_NUM: usize = (TAIL_SEGMENTS * 6 + (TAIL_SEGMENTS - 1) * 3 + 2 * 3 * 2) * 2; 
                     // rectangles           triangles at joints   caps at ends
-const SEGMENT_DELTA_T: f32 = 0.04; // seconds
-const TIME_AT_START: f32 = -SEGMENT_DELTA_T * (TAIL_SEGMENTS as f32);
+const SEGMENT_DELTA_T: f64 = 0.04; // seconds
+const TIME_AT_START: f64 = -SEGMENT_DELTA_T * (TAIL_SEGMENTS as f64);
 
-const PI: f32 = std::f32::consts::PI;
-pub const W: f32 = crate::DEST_REF as f32; // three width in px
-const CLIMBING_SPEED: f32 = 50.0; // px/s
-pub const LEG_EXTENSION_COEFFICIENT: f32 = 1.95; // must be lightly under 2, bigger -> leg more straight
-const STEP_RATIO: f32 = 2.0; // max distance between arm and leg is 2 times larger than min distance
+const PI: f64 = std::f64::consts::PI;
+pub const W: f64 = crate::DEST_REF as f64; // three width in px
+const CLIMBING_SPEED: f64 = 50.0; // px/s
+pub const LEG_EXTENSION_COEFFICIENT: f64 = 1.95; // must be lightly under 2, bigger -> leg more straight
+const STEP_RATIO: f64 = 2.0; // max distance between arm and leg is 2 times larger than min distance
 
 impl crate::Pos {
     fn new() -> crate::Pos {
@@ -42,39 +42,39 @@ impl crate::Pos {
 }
 
 pub struct MonkeyClimbing {
-    pub total_height: f32,
+    pub total_height: f64,
     now_segment: usize,
     body_pos: crate::Pos,
     left_arm_right_arm_left_leg_right_leg: [crate::Pos; 4],
-    goal_height: f32,
+    goal_height: f64,
     pub on_goal: bool,
     pub vertex_arr: [f32; 168 + TAIL_COORDS_NUM],
     pub texture_arr: [f32; 168 + TAIL_COORDS_NUM],
-    pub tail_time: f32,
+    pub tail_time: f64,
     goal_just_set: bool,
 }
 
 pub struct TreeElForClimbingNotLinear {
-    pub center_x: f32,
-    pub center_y: f32,
-    pub radius: f32,
-    pub angle_stop: f32,
+    pub center_x: f64,
+    pub center_y: f64,
+    pub radius: f64,
+    pub angle_stop: f64,
 }
 
 pub struct TreeElForClimbing {
-    pub angle_start: f32,
-    dist_from_root_start: f32,
-    pub length: f32,
-    pub start_x: f32,
-    pub start_y: f32,
-    end_x: f32,
-    end_y: f32,
+    pub angle_start: f64,
+    dist_from_root_start: f64,
+    pub length: f64,
+    pub start_x: f64,
+    pub start_y: f64,
+    end_x: f64,
+    end_y: f64,
     pub right: u32,
     pub left: u32,
     pub for_not_linear: Option<TreeElForClimbingNotLinear>,
-    arm_dist: f32,
-    leg_dist: f32,
-    step: f32, // each step, monkey's center does this dist, and moving limb does 2x this
+    arm_dist: f64,
+    leg_dist: f64,
+    step: f64, // each step, monkey's center does this dist, and moving limb does 2x this
                // and it's also a difference between bended and extended arms (or legs)
 }
 
@@ -84,9 +84,9 @@ pub struct TreeUnitReduced {
 }
 
 struct ClimbingHistoryEl {
-    start_t: f32,
-    start_angle: f32,
-    angle_vel: f32,
+    start_t: f64,
+    start_angle: f64,
+    angle_vel: f64,
 }
 
 pub struct ClimbingHistory {
@@ -110,8 +110,8 @@ impl ClimbingHistory {
     }
 
     fn new_with_params(
-        start_angle: f32,
-        angle_vel: f32,
+        start_angle: f64,
+        angle_vel: f64,
         tail_segnum: i32,
         prev_on_goal: bool) -> ClimbingHistory {
         let first_el = ClimbingHistoryEl{
@@ -126,7 +126,7 @@ impl ClimbingHistory {
         }
     }
 
-    fn get_angle(&self, t: f32) -> f32 {
+    fn get_angle(&self, t: f64) -> f64 {
         for el in self.deque.iter().rev() {
             if t >= el.start_t {
                 let now_t = t - el.start_t;
@@ -136,7 +136,7 @@ impl ClimbingHistory {
         return 0.0; // we must not be here
     }
 
-    fn add_at_rest(&mut self, start_t: f32, now_angle: f32) {
+    fn add_at_rest(&mut self, start_t: f64, now_angle: f64) {
         let new_el = ClimbingHistoryEl{
             start_t,
             start_angle: now_angle,
@@ -145,7 +145,7 @@ impl ClimbingHistory {
         self.deque.push_back(new_el);
     }
 
-    fn add_at_movement(&mut self, start_t: f32, start_angle: f32, angle_vel: f32) {
+    fn add_at_movement(&mut self, start_t: f64, start_angle: f64, angle_vel: f64) {
         let new_el = ClimbingHistoryEl{
             start_t,
             start_angle,
@@ -154,7 +154,7 @@ impl ClimbingHistory {
         self.deque.push_back(new_el);
     }
 
-    fn find_number_to_remove(&self, time_limit: f32) -> i32 {
+    fn find_number_to_remove(&self, time_limit: f64) -> i32 {
         let mut counter = 0;
         for el in &self.deque {
             if el.start_t > time_limit {return if counter - 1 > 0 {counter - 1} else {0};}
@@ -163,7 +163,7 @@ impl ClimbingHistory {
         return 0;
     }
 
-    fn remove_too_old(&mut self, now_t: f32) {
+    fn remove_too_old(&mut self, now_t: f64) {
         let time_limit = now_t + TIME_AT_START - 1.0;
         let number_to_remove = self.find_number_to_remove(time_limit);
         for _ in 0..number_to_remove {
@@ -199,12 +199,12 @@ impl crate::TreeStruct {
 }
 
 fn make_tree_for_climbing_unit(reduced_unit: &TreeUnitReduced,
-                               start_x: f32,
-                               start_y: f32,
-                               angle_start: f32,
-                               dist_from_root_start: f32,
-                               straight_up_dist: f32,
-                               straight_down_dist: f32) -> (TreeElForClimbing, f32, f32, f32, f32) {
+                               start_x: f64,
+                               start_y: f64,
+                               angle_start: f64,
+                               dist_from_root_start: f64,
+                               straight_up_dist: f64,
+                               straight_down_dist: f64) -> (TreeElForClimbing, f64, f64, f64, f64) {
     let for_not_linear;
     let length;
     let end_x;
@@ -212,8 +212,8 @@ fn make_tree_for_climbing_unit(reduced_unit: &TreeUnitReduced,
     let angle_stop;
     let (arm_dist, leg_dist);
     if reduced_unit.right != reduced_unit.left {
-        let right = reduced_unit.right as f32;
-        let left = reduced_unit.left as f32;
+        let right = reduced_unit.right as f64;
+        let left = reduced_unit.left as f64;
         let dif_right_left = right - left;
         let sum_right_left = right + left;
         let delta_angle = dif_right_left * PI / 6.0;
@@ -233,7 +233,7 @@ fn make_tree_for_climbing_unit(reduced_unit: &TreeUnitReduced,
         });
     } else {
         for_not_linear = None;
-        length = W * PI / 6.0 * (reduced_unit.right as f32);
+        length = W * PI / 6.0 * (reduced_unit.right as f64);
         end_x = start_x - length * angle_start.sin();
         end_y = start_y + length * angle_start.cos();
         angle_stop = angle_start;
@@ -260,8 +260,8 @@ fn make_tree_for_climbing_unit(reduced_unit: &TreeUnitReduced,
 
 impl crate::TreeStruct {
     pub fn make_tree_for_climbing(&mut self,
-                            straight_up_dist: f32,
-                            straight_down_dist: f32) {
+                            straight_up_dist: f64,
+                            straight_down_dist: f64) {
         self.make_joined_tree();
         let mut tree_for_climbing: Vec<TreeElForClimbing> = vec![];
         let mut start_x = self.x_start;
@@ -289,7 +289,7 @@ impl crate::TreeStruct {
         self.tree_for_climbing = tree_for_climbing;
     }
 
-    pub fn monkey_on_animation_frame(&mut self, deltat: f32) {
+    pub fn monkey_on_animation_frame(&mut self, deltat: f64) {
         let mut new_height;
         if !self.monkey_climbing.on_goal {
             if self.monkey_climbing.goal_height > self.monkey_climbing.total_height {
@@ -311,7 +311,7 @@ impl crate::TreeStruct {
         }
     }
 
-    pub fn set_monkey_on_start(&mut self, height: f32) {
+    pub fn set_monkey_on_start(&mut self, height: f64) {
         self.monkey_climbing.total_height = height;
         self.monkey_climbing.tail_time = 0.0;
         let tail_height = height - DELTAY_BACK - LEG_WIDTH_START * 0.5;
@@ -336,7 +336,7 @@ impl crate::TreeStruct {
         self.update_monkey_based_on_height();
     }
 
-    pub fn get_monkey_max_height(&self) -> f32 {
+    pub fn get_monkey_max_height(&self) -> f64 {
         let h0 = self.monkey_climbing.total_height;
         let h_head = h0 + DELTAY_FRONT + HEAD_HEIGHT;
         let monkey_segment = self.monkey_climbing.now_segment;
@@ -345,8 +345,8 @@ impl crate::TreeStruct {
     }
 }
 
-fn get_segment_x_y_after_verif(dist_from_root: f32,
-                               segment: &TreeElForClimbing) -> (f32, f32) {
+fn get_segment_x_y_after_verif(dist_from_root: f64,
+                               segment: &TreeElForClimbing) -> (f64, f64) {
     let dist_from_start = dist_from_root - segment.dist_from_root_start;
     match &segment.for_not_linear {
         None => {
@@ -368,7 +368,7 @@ fn get_segment_x_y_after_verif(dist_from_root: f32,
 
 impl crate::TreeStruct {
     fn get_segment(&self,
-                   dist_from_root: f32,
+                   dist_from_root: f64,
                    segment_num: usize) -> Option<usize> {
         let mut segment_num = segment_num;
         let tree = &self.tree_for_climbing;
@@ -409,8 +409,8 @@ impl crate::TreeStruct {
 
 
     fn get_segment_x_y_dist_from_root_body(&self,
-                    dist_from_root: f32,
-                    segment_num: usize) -> (usize, f32, f32, f32) {
+                    dist_from_root: f64,
+                    segment_num: usize) -> (usize, f64, f64, f64) {
         let mut segment_num = segment_num;
         let tree = &self.tree_for_climbing;
         let tree_len = tree.len();
@@ -444,15 +444,16 @@ impl crate::TreeStruct {
 
 impl MonkeyClimbing {
     pub fn new() -> MonkeyClimbing {
-        let mut texture_arr = [261.0 / crate::IMAGE_SIDE; 168 + TAIL_COORDS_NUM]; // 261, 261 is "not transparent" point on monkey texture
-        let head_x1 = 994.0 / crate::IMAGE_SIDE;
-        let head_x2 = 1016.0 / crate::IMAGE_SIDE;
-        let head_y1 = 534.0 / crate::IMAGE_SIDE;
-        let head_y2 = 511.0 / crate::IMAGE_SIDE;
-        let butt_x1 = 994.0 / crate::IMAGE_SIDE;
-        let butt_x2 = 1016.0 / crate::IMAGE_SIDE;
-        let butt_y1 = 574.0 / crate::IMAGE_SIDE;
-        let butt_y2 = 569.0 / crate::IMAGE_SIDE;
+        let image_side = crate::IMAGE_SIDE as f32;
+        let mut texture_arr = [261.0 /image_side; 168 + TAIL_COORDS_NUM]; // 261, 261 is "not transparent" point on monkey texture
+        let head_x1 = 994.0 / image_side;
+        let head_x2 = 1016.0 / image_side;
+        let head_y1 = 534.0 / image_side;
+        let head_y2 = 511.0 / image_side;
+        let butt_x1 = 994.0 / image_side;
+        let butt_x2 = 1016.0 / image_side;
+        let butt_y1 = 574.0 / image_side;
+        let butt_y2 = 569.0 / image_side;
         // x1y2___________x2y2
         //  |  \ xxxxxx    |
         //  |  xxx\xxxxxx  |
@@ -487,7 +488,7 @@ impl MonkeyClimbing {
             goal_just_set: false,
         }
     }
-    pub fn set_goal(&mut self, goal: f32) {
+    pub fn set_goal(&mut self, goal: f64) {
         self.goal_height = goal;
         self.on_goal = false;
         self.goal_just_set = true;
@@ -495,8 +496,8 @@ impl MonkeyClimbing {
 
     pub fn convert_vert_arr_to_screen_coords(&mut self, start: usize, stop: usize) {
         for i in start / 2 .. stop / 2 {
-            self.vertex_arr[2 * i] = self.vertex_arr[2 * i] * 2.0 / crate::CANVAS_REF_WIDTH - 1.0;
-            self.vertex_arr[2 * i + 1] = self.vertex_arr[2 * i + 1] * 2.0 / crate::CANVAS_REF_HEIGHT - 1.0;
+            self.vertex_arr[2 * i] = self.vertex_arr[2 * i] * 2.0 / crate::CANVAS_REF_WIDTH as f32 - 1.0;
+            self.vertex_arr[2 * i + 1] = self.vertex_arr[2 * i + 1] * 2.0 / crate::CANVAS_REF_HEIGHT as f32 - 1.0;
         }
     }
 
@@ -607,7 +608,7 @@ impl crate::TreeStruct {
         self.create_body_params_vec_and_quad();
     }
 
-    fn get_pos_angle_segnum_extrapolate(&self, height: f32) -> (crate::Pos, f32, i32) {
+    fn get_pos_angle_segnum_extrapolate(&self, height: f64) -> (crate::Pos, f64, i32) {
         let x;
         let y;
         let angle;
@@ -660,7 +661,7 @@ impl crate::TreeStruct {
         (crate::Pos{x, y}, angle, segnum)
     }
     
-    fn get_x_y_start_limb(&self, deltay: f32, deltax: f32) -> crate::Pos {
+    fn get_x_y_start_limb(&self, deltay: f64, deltax: f64) -> crate::Pos {
         let height_start = self.monkey_climbing.total_height + deltay;
         let (pos_center, angle, _) = self.get_pos_angle_segnum_extrapolate(height_start);
         let x = pos_center.x + deltax * angle.cos();
@@ -762,6 +763,22 @@ impl crate::TreeStruct {
         let deltay_4_actual = deltay_4 * ratio;
         let x4 = pos_ancle.x + deltax_4_actual;
         let y4 = pos_ancle.y + deltay_4_actual;
+        let x1 = x1 as f32;
+        let x2 = x2 as f32;
+        let x3 = x3 as f32;
+        let x4 = x4 as f32;
+        let x5 = x5 as f32;
+        let x6 = x6 as f32;
+        let x7 = x7 as f32;
+        let x8 = x8 as f32;
+        let y1 = y1 as f32;
+        let y2 = y2 as f32;
+        let y3 = y3 as f32;
+        let y4 = y4 as f32;
+        let y5 = y5 as f32;
+        let y6 = y6 as f32;
+        let y7 = y7 as f32;
+        let y8 = y8 as f32;
         let triangles = [
             x8, y8, x2, y2, x1, y1,
             x8, y8, x3, y3, x2, y2,
@@ -773,7 +790,7 @@ impl crate::TreeStruct {
         self.monkey_climbing.vertex_arr[start..start + 36].copy_from_slice(&triangles);
     }
 
-    pub fn update_tail(&mut self, deltat: f32) { // deltat in seconds
+    pub fn update_tail(&mut self, deltat: f64) { // deltat in seconds
         self.monkey_climbing.tail_time = self.monkey_climbing.tail_time + deltat;
         let tail_height = self.monkey_climbing.total_height - DELTAY_BACK - LEG_WIDTH_START * 0.5;
         let tree_len = self.tree_for_climbing.len();
@@ -865,10 +882,10 @@ impl crate::TreeStruct {
         let mut start_index = self.monkey_climbing.vertex_arr.len() - TAIL_COORDS_NUM;
         let angle1 = angle + PI/2.0 + PI/3.0;
         let angle2 = angle1 + PI/3.0;
-        let p01x = segment_start_x + semiwidth * angle1.cos();
-        let p01y = segment_start_y + semiwidth * angle1.sin();
-        let p02x = segment_start_x + semiwidth * angle2.cos();
-        let p02y = segment_start_y + semiwidth * angle2.sin();
+        let p01x = (segment_start_x + semiwidth * angle1.cos()) as f32;
+        let p01y = (segment_start_y + semiwidth * angle1.sin()) as f32;
+        let p02x = (segment_start_x + semiwidth * angle2.cos()) as f32;
+        let p02y = (segment_start_y + semiwidth * angle2.sin()) as f32;
 
         //             p1___________p3
         // <-beginning |\---_____   | end->
@@ -887,10 +904,10 @@ impl crate::TreeStruct {
         //       \_ |
         //         p2
 
-        let mut p1x = segment_start_x - semiwidth * angle.sin();
-        let mut p1y = segment_start_y + semiwidth * angle.cos();
-        let mut p2x = segment_start_x + semiwidth * angle.sin();
-        let mut p2y = segment_start_y - semiwidth * angle.cos();
+        let mut p1x = (segment_start_x - semiwidth * angle.sin()) as f32;
+        let mut p1y = (segment_start_y + semiwidth * angle.cos()) as f32;
+        let mut p2x = (segment_start_x + semiwidth * angle.sin()) as f32;
+        let mut p2y = (segment_start_y - semiwidth * angle.cos()) as f32;
         let arr = [
             p1x, p1y, p01x, p01y, p02x, p02y,
             p1x, p1y, p02x, p02y, p2x, p2y,
@@ -901,10 +918,10 @@ impl crate::TreeStruct {
             tail_t -= SEGMENT_DELTA_T;
             let segment_end_x = segment_start_x + TAIL_SEGMENT_LEN * angle.cos();
             let segment_end_y = segment_start_y + TAIL_SEGMENT_LEN * angle.sin();
-            let p3x = segment_end_x - semiwidth * angle.sin();
-            let p3y = segment_end_y + semiwidth * angle.cos();
-            let p4x = segment_end_x + semiwidth * angle.sin();
-            let p4y = segment_end_y - semiwidth * angle.cos();
+            let p3x = (segment_end_x - semiwidth * angle.sin()) as f32;
+            let p3y = (segment_end_y + semiwidth * angle.cos()) as f32;
+            let p4x = (segment_end_x + semiwidth * angle.sin()) as f32;
+            let p4y = (segment_end_y - semiwidth * angle.cos()) as f32;
             let arr = [
                 p1x, p1y, p2x, p2y, p4x, p4y,
                 p1x, p1y, p3x, p3y, p4x, p4y];
@@ -912,17 +929,27 @@ impl crate::TreeStruct {
             start_index += 12;
             if i < TAIL_SEGMENTS - 1 {
                 let next_angle = self.get_angle(tail_t);
-                p1x = segment_end_x - semiwidth * next_angle.sin();
-                p1y = segment_end_y + semiwidth * next_angle.cos();
-                p2x = segment_end_x + semiwidth * next_angle.sin();
-                p2y = segment_end_y - semiwidth * next_angle.cos();
+                p1x = (segment_end_x - semiwidth * next_angle.sin()) as f32;
+                p1y = (segment_end_y + semiwidth * next_angle.cos()) as f32;
+                p2x = (segment_end_x + semiwidth * next_angle.sin()) as f32;
+                p2y = (segment_end_y - semiwidth * next_angle.cos()) as f32;
                 let arr;
                 if next_angle > angle {
                     // triangle p4, pcenter, p2
-                    arr = [p4x, p4y, segment_end_x, segment_end_y, p2x, p2y];
+                    arr = [p4x as f32,
+                           p4y as f32,
+                           segment_end_x as f32,
+                           segment_end_y as f32,
+                           p2x as f32,
+                           p2y as f32];
                 } else {
                     // triangle p3, pcenter, p1
-                    arr = [p3x, p3y, segment_end_x, segment_end_y, p1x, p1y];
+                    arr = [p3x as f32,
+                           p3y as f32,
+                           segment_end_x as f32,
+                           segment_end_y as f32,
+                           p1x as f32,
+                           p1y as f32];
                 }
                 self.monkey_climbing.vertex_arr[start_index..start_index + 6].copy_from_slice(&arr);
                 start_index += 6;
@@ -945,10 +972,10 @@ impl crate::TreeStruct {
                 // p4
                 let angle1 = angle + PI/6.0;
                 let angle2 = angle - PI/6.0;
-                let p03x = segment_end_x + semiwidth * angle1.cos();
-                let p03y = segment_end_y + semiwidth * angle1.sin();
-                let p04x = segment_end_x + semiwidth * angle2.cos();
-                let p04y = segment_end_y + semiwidth * angle2.sin();
+                let p03x = (segment_end_x + semiwidth * angle1.cos()) as f32;
+                let p03y = (segment_end_y + semiwidth * angle1.sin()) as f32;
+                let p04x = (segment_end_x + semiwidth * angle2.cos()) as f32;
+                let p04y = (segment_end_y + semiwidth * angle2.sin()) as f32;
                 let arr = [
                     p3x, p3y, p03x, p03y, p04x, p04y,
                     p3x, p3y, p04x, p04y, p4x, p4y,
@@ -974,25 +1001,25 @@ impl crate::TreeStruct {
             P2, P3, P4];*/
         let head_h = self.monkey_climbing.total_height + DELTAY_FRONT - 0.5;
         let (head_start, angle, _) = self.get_pos_angle_segnum_extrapolate(head_h);
-        let p1_x = head_start.x - HEAD_WIDTH*0.5 * angle.cos();
-        let p1_y = head_start.y - HEAD_WIDTH*0.5 * angle.sin();
-        let p2_x = p1_x - HEAD_HEIGHT * angle.sin();
-        let p2_y = p1_y + HEAD_HEIGHT * angle.cos();
-        let p3_x = p2_x + HEAD_WIDTH * angle.cos();
-        let p3_y = p2_y + HEAD_WIDTH * angle.sin();
-        let p4_x = p3_x + HEAD_HEIGHT * angle.sin();
-        let p4_y = p3_y - HEAD_HEIGHT * angle.cos();
+        let p1_x = (head_start.x - HEAD_WIDTH*0.5 * angle.cos()) as f32;
+        let p1_y = (head_start.y - HEAD_WIDTH*0.5 * angle.sin()) as f32;
+        let p2_x = p1_x - (HEAD_HEIGHT * angle.sin()) as f32;
+        let p2_y = p1_y + (HEAD_HEIGHT * angle.cos()) as f32;
+        let p3_x = p2_x + (HEAD_WIDTH * angle.cos()) as f32;
+        let p3_y = p2_y + (HEAD_WIDTH * angle.sin()) as f32;
+        let p4_x = p3_x + (HEAD_HEIGHT * angle.sin()) as f32;
+        let p4_y = p3_y - (HEAD_HEIGHT * angle.cos()) as f32;
 
         let butt_h = self.monkey_climbing.total_height - DELTAY_BACK + 0.2;
         let (butt_start, angle, _) = self.get_pos_angle_segnum_extrapolate(butt_h);
-        let b2_x = butt_start.x - BUTT_WIDTH*0.5 * angle.cos();
-        let b2_y = butt_start.y - BUTT_WIDTH*0.5 * angle.sin();
-        let b3_x = b2_x + BUTT_WIDTH * angle.cos();
-        let b3_y = b2_y + BUTT_WIDTH * angle.sin();
-        let b4_x = b3_x + BUTT_HEIGHT * angle.sin();
-        let b4_y = b3_y - BUTT_HEIGHT * angle.cos();
-        let b1_x = b4_x - BUTT_WIDTH * angle.cos();
-        let b1_y = b4_y - BUTT_WIDTH * angle.sin();
+        let b2_x = (butt_start.x - BUTT_WIDTH*0.5 * angle.cos()) as f32;
+        let b2_y = (butt_start.y - BUTT_WIDTH*0.5 * angle.sin()) as f32;
+        let b3_x = b2_x + (BUTT_WIDTH * angle.cos()) as f32;
+        let b3_y = b2_y + (BUTT_WIDTH * angle.sin()) as f32;
+        let b4_x = b3_x + (BUTT_HEIGHT * angle.sin()) as f32;
+        let b4_y = b3_y - (BUTT_HEIGHT * angle.cos()) as f32;
+        let b1_x = b4_x - (BUTT_WIDTH * angle.cos()) as f32;
+        let b1_y = b4_y - (BUTT_WIDTH * angle.sin()) as f32;
 
         let arr = [
             p2_x, p2_y,
@@ -1021,10 +1048,10 @@ impl crate::TreeStruct {
             let cy = self.y_start + height_down;
             let alp = 0.0;
             let l = -height_down;
-            self.body_params_vec.push(cx);
-            self.body_params_vec.push(cy);
-            self.body_params_vec.push(alp);
-            self.body_params_vec.push(l);
+            self.body_params_vec.push(cx as f32);
+            self.body_params_vec.push(cy as f32);
+            self.body_params_vec.push(alp as f32);
+            self.body_params_vec.push(l as f32);
         }
         for segment_num in 0..self.tree_for_climbing.len() {
             self.monkey_body_add_segment(segment_num, height_up, height_down);
@@ -1034,20 +1061,20 @@ impl crate::TreeStruct {
         if height_up > tree_len {
             self.body_params_vec.push(-1.0);
             let (pstart, angle_start, _) = self.get_pos_angle_segnum_extrapolate(tree_len);
-            self.body_params_vec.push(pstart.x);
-            self.body_params_vec.push(pstart.y);
-            self.body_params_vec.push(angle_start);
-            self.body_params_vec.push(height_up - tree_len);
+            self.body_params_vec.push(pstart.x as f32);
+            self.body_params_vec.push(pstart.y as f32);
+            self.body_params_vec.push(angle_start as f32);
+            self.body_params_vec.push((height_up - tree_len) as f32);
         }
         let total = self.body_params_vec.len() as f32;
         self.body_params_vec[0] = total;
 
         let pos_center = &self.monkey_climbing.body_pos;
         let delta = if DELTAY_BACK > DELTAY_FRONT {DELTAY_BACK} else {DELTAY_FRONT} + 3.0;
-        let x1 = (pos_center.x - delta) * 2.0 / crate::CANVAS_REF_WIDTH - 1.0;
-        let x2 = (pos_center.x + delta) * 2.0 / crate::CANVAS_REF_WIDTH - 1.0;
-        let y1 = (pos_center.y - delta) * 2.0 / crate::CANVAS_REF_HEIGHT - 1.0;
-        let y2 = (pos_center.y + delta) * 2.0 / crate::CANVAS_REF_HEIGHT - 1.0;
+        let x1 = ((pos_center.x - delta) * 2.0 / crate::CANVAS_REF_WIDTH - 1.0) as f32;
+        let x2 = ((pos_center.x + delta) * 2.0 / crate::CANVAS_REF_WIDTH - 1.0) as f32;
+        let y1 = ((pos_center.y - delta) * 2.0 / crate::CANVAS_REF_HEIGHT - 1.0) as f32;
+        let y2 = ((pos_center.y + delta) * 2.0 / crate::CANVAS_REF_HEIGHT - 1.0) as f32;
         self.body_quad = [
             x1, y1,
             x1, y2,
@@ -1061,8 +1088,8 @@ impl crate::TreeStruct {
     fn monkey_body_add_segment(
         &mut self,
         segment_num: usize,
-        height_up: f32,
-        height_down: f32) {
+        height_up: f64,
+        height_down: f64) {
         let segment = &self.tree_for_climbing[segment_num];
         let segment_start = segment.dist_from_root_start;
         if height_up < segment_start {
@@ -1085,9 +1112,9 @@ impl crate::TreeStruct {
         match &segment.for_not_linear {
             Some(not_linear) => {
                 self.body_params_vec.push(1.0);
-                self.body_params_vec.push(not_linear.center_x);
-                self.body_params_vec.push(not_linear.center_y);
-                self.body_params_vec.push(not_linear.radius.abs());
+                self.body_params_vec.push(not_linear.center_x as f32);
+                self.body_params_vec.push(not_linear.center_y as f32);
+                self.body_params_vec.push(not_linear.radius.abs() as f32);
                 let angle_stop;
                 if segment_stop > height_up {
                     (_, angle_stop, _) = self.get_pos_angle_segnum_extrapolate(height_up);
@@ -1103,16 +1130,16 @@ impl crate::TreeStruct {
                     converted_angle_start = PI + angle_start;
                     converted_angle_stop = PI + angle_stop;
                 }
-                self.body_params_vec.push(converted_angle_start);
-                self.body_params_vec.push(converted_angle_stop);
+                self.body_params_vec.push(converted_angle_start as f32);
+                self.body_params_vec.push(converted_angle_stop as f32);
             }
             None => {
                 self.body_params_vec.push(-1.0);
                 let (pstart, _, _) = self.get_pos_angle_segnum_extrapolate(part_start);
-                self.body_params_vec.push(pstart.x);
-                self.body_params_vec.push(pstart.y);
-                self.body_params_vec.push(angle_start);
-                self.body_params_vec.push(part_stop - part_start);
+                self.body_params_vec.push(pstart.x as f32);
+                self.body_params_vec.push(pstart.y as f32);
+                self.body_params_vec.push(angle_start as f32);
+                self.body_params_vec.push((part_stop - part_start) as f32);
             }
         }
     }
@@ -1159,7 +1186,7 @@ fn lines_intersection(pos1: crate::Pos, pos2: crate::Pos, pos3: crate::Pos, pos4
     crate::Pos{x, y}
 }
 
-fn get_ancle(pos1: &crate::Pos, pos2: &crate::Pos, l: f32, is_clockwise: bool) -> crate::Pos {
+fn get_ancle(pos1: &crate::Pos, pos2: &crate::Pos, l: f64, is_clockwise: bool) -> crate::Pos {
     let deltax = pos2.x - pos1.x;
     let deltay = pos2.y - pos1.y;
     let center_x = (pos1.x + pos2.x) / 2.0;
@@ -1190,7 +1217,7 @@ impl crate::Monkey {
                     None => {
                         if tree_for_climbing.is_empty() {
                             self.monkey_state = crate::MonkeyState::Running;
-                            self.running.set_on_pos(tree_struct.x_start, tree_struct.y_start as f32);
+                            self.running.set_on_pos(tree_struct.x_start, tree_struct.y_start as f64);
                         } else {
                             tree_struct.go_to_top();
                         }
@@ -1202,7 +1229,7 @@ impl crate::Monkey {
     }
 }
 
-fn get_circle_circle_intersection(r1: f32, r2: f32, deltax: f32) -> (f32, f32) {
+fn get_circle_circle_intersection(r1: f64, r2: f64, deltax: f64) -> (f64, f64) {
     // center of coordinates in center of big circle (r1),
     // center of r2 is deplaced at left on deltax
     let x_intersect = (r1*r1 - r2*r2 + deltax*deltax) / 2.0 / deltax;
@@ -1210,7 +1237,7 @@ fn get_circle_circle_intersection(r1: f32, r2: f32, deltax: f32) -> (f32, f32) {
     (x_intersect, y)
 }
 
-fn get_circ_extended_length(r: f32) -> (f32, f32) {
+fn get_circ_extended_length(r: f64) -> (f64, f64) {
     let r_arm_extended = ARM_SEGMENT_LENGTH * LEG_EXTENSION_COEFFICIENT;
     let r_leg_extended = LEG_SEGMENT_LENGTH * LEG_EXTENSION_COEFFICIENT;
     let r_center = r.abs();
@@ -1245,12 +1272,12 @@ fn get_circ_extended_length(r: f32) -> (f32, f32) {
 
 pub struct LimbsPos {
     left_arm_right_arm_left_leg_right_leg: [crate::Pos; 4],
-    center_pos:f32, // if center is between center_pos1 and center_pos2,
+    center_pos:f64, // if center is between center_pos1 and center_pos2,
                     // leg_end will be interpolated between leg_pos1 and leg_pos2.
                     // center_pos is distance from root
 }
 
-fn get_limb_pos_x_y_segment_known(dist_from_root: f32,
+fn get_limb_pos_x_y_segment_known(dist_from_root: f64,
                              segment: &TreeElForClimbing,
                              is_left: bool) -> crate::Pos {
     let dist_from_start_segment = dist_from_root - segment.dist_from_root_start;
@@ -1275,7 +1302,7 @@ fn get_limb_pos_x_y_segment_known(dist_from_root: f32,
 
 impl crate::TreeStruct {
     fn get_limb_pos_x_y(&self,
-                dist_from_root: f32,
+                dist_from_root: f64,
                 current_segment: usize,
                 is_left: bool) -> crate::Pos {
         let tree = &self.tree_for_climbing;
@@ -1327,25 +1354,25 @@ impl crate::TreeStruct {
 
 #[derive(Clone)]
 struct ArmLegCharact {
-    a: f32, // arm distance
-    l: f32, // leg distance
-    step: f32,
+    a: f64, // arm distance
+    l: f64, // leg distance
+    step: f64,
 }
 
 struct MonkeyClimbingNodePoint {
     is_right_up: bool,
     down_arm_leg: ArmLegCharact,
     up_arm_leg: ArmLegCharact,
-    center_pos: f32,
-    down_leg_pos: f32,
-    up_leg_pos: f32,
-    down_arm_pos: f32,
-    up_arm_pos: f32,
+    center_pos: f64,
+    down_leg_pos: f64,
+    up_leg_pos: f64,
+    down_arm_pos: f64,
+    up_arm_pos: f64,
     is_final: bool,
     center_segment_num: usize,
 }
 
-fn make_in_bounds(input: f32, lower: f32, upper: f32) -> f32 {
+fn make_in_bounds(input: f64, lower: f64, upper: f64) -> f64 {
     if input < lower {lower} else {if input > upper {upper} else {input}}
 }
 
@@ -1443,7 +1470,7 @@ impl MonkeyClimbingNodePoint {
 }
 
 impl TreeElForClimbing {
-    fn is_onclick(&self, x: f32, y: f32) -> Option<f32> {
+    fn is_onclick(&self, x: f64, y: f64) -> Option<f64> {
         match &self.for_not_linear {
             Some(not_linear) => {
                 let dif_x = x - not_linear.center_x;
@@ -1495,7 +1522,7 @@ impl TreeElForClimbing {
         }
     }
 
-    fn get_radial_velosity(&self) -> f32 {
+    fn get_radial_velosity(&self) -> f64 {
         match &self.for_not_linear {
             None => {return 0.0;}
             Some(not_linear) => {
@@ -1506,7 +1533,7 @@ impl TreeElForClimbing {
 }
 
 impl crate::TreeStruct {
-    fn try_a(&self, a: f32, dist: f32) -> bool {
+    fn try_a(&self, a: f64, dist: f64) -> bool {
         let tree = &self.tree_for_climbing;
         for el in tree {
             if el.dist_from_root_start >= dist {
@@ -1519,7 +1546,7 @@ impl crate::TreeStruct {
         return true;
     }
 
-    fn get_first_right_arm_dist(&self, center_pos: f32) -> f32 {
+    fn get_first_right_arm_dist(&self, center_pos: f64) -> f64 {
         let tree = &self.tree_for_climbing;
         let first_segment = tree.first().unwrap();
         let a = first_segment.arm_dist;
@@ -1538,7 +1565,7 @@ impl crate::TreeStruct {
                 last_el_num = right_arm_segment_num;
             }
         }
-        let mut a_s: Vec<f32> = vec![max_dist - center_pos];
+        let mut a_s: Vec<f64> = vec![max_dist - center_pos];
         for el_a in  tree[..=last_el_num].iter().map(|el| el.arm_dist) {
             if center_pos + el_a < max_dist {
                 a_s.push(el_a);
@@ -1642,7 +1669,7 @@ impl crate::TreeStruct {
         self.limbs_vec = limbs_vec;
     }
 
-    pub fn get_dest_on_click(&self, x:f32, y: f32) -> Option<f32> {
+    pub fn get_dest_on_click(&self, x:f64, y: f64) -> Option<f64> {
         for el in self.tree_for_climbing.iter().rev() {
             match el.is_onclick(x, y) {
                 Some(val) => {
@@ -1655,7 +1682,7 @@ impl crate::TreeStruct {
         return None;
     }
 
-    fn get_angle(&self, t: f32) -> f32 {
+    fn get_angle(&self, t: f64) -> f64 {
         let basic_angle = (t / TAIL_PERIOD * (2.0 * PI)).sin() * ANGLE_MAX;
         let add_angle = self.climbing_history.get_angle(t);
         basic_angle + add_angle

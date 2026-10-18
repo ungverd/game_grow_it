@@ -447,12 +447,12 @@ fn populate_leaf(rect: &Rect,
                  prev_left: i32,
                  prev_right: i32) {
     let is_first = segment.is_first;
-    let straightleaf = ((segment.straight as i32) * 2 + (is_leaf as i32)) as f32;
+    let straightleaf = ((segment.straight as i32) * 2 + (is_leaf as i32)) as f64;
     arr[0][entity_num * 4] = rect.x as f32;
     arr[0][entity_num * 4 + 1] = rect.y as f32;
     arr[0][entity_num * 4 + 2] = rect.width as f32;
     arr[0][entity_num * 4 + 3] = rect.height as f32;
-    arr[2][entity_num * 4] = straightleaf;
+    arr[2][entity_num * 4] = straightleaf as f32;
     arr[3][entity_num * 4] = segment.distance_from_root as f32;
     arr[3][entity_num * 4 + 2] = prev_left as f32;
     arr[3][entity_num * 4 + 3] = prev_right as f32;

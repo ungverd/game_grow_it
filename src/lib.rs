@@ -10,8 +10,8 @@ mod tree_contours;
 pub const MAX_RECTS: usize = 1024;
 pub const BUF_LENGTH: usize = MAX_RECTS * 4;
 pub const NUM_UNIFORM_ARRAYS: usize = 7;
-pub const CANVAS_REF_WIDTH: f32 = 600.0;
-pub const CANVAS_REF_HEIGHT: f32 = 600.0;
+pub const CANVAS_REF_WIDTH: f64 = 600.0;
+pub const CANVAS_REF_HEIGHT: f64 = 600.0;
 pub const UBOS_NAMES: [&'static str; 7] = ["Position_size",
                                        "Center_x_y_bound_min_max_mat",
                                        "Straightleaf_left_radius_convastart_x_y_to_plus",
@@ -21,16 +21,16 @@ pub const UBOS_NAMES: [&'static str; 7] = ["Position_size",
                                        "Radius1_dif1_radius2_dif2"];
 pub const DEST_REF: i32 = 26; // width of tree in pixels
 
-pub const START_X: f32 = 300.0;
-pub const START_Y: f32 = 1.0; // coordinates where three starts
-pub const MONKEY_SCALING: f32 = 0.7; // 0.5 - monkey will be drawn smaller
-pub const CLIMBING_SCALING: f32 = 0.5; // also monkey scaling but for climbing
-pub const IMAGE_SIDE: f32 = 1024.0; //px
-pub const BODY_START_Y: f32 = 569.0 / IMAGE_SIDE;
-pub const BODY_CENTER_X: f32 = 1005.0 / IMAGE_SIDE;
-const BODY_DELTA_X_PX: f32 = 12.0; // px on texture
-pub const BODY_SEMI_W_TO_DRAW: f32 = BODY_DELTA_X_PX * CLIMBING_SCALING;
-pub const PX_SCREEN_TO_MONKEY_TEXTURE: f32 = 1.0 / IMAGE_SIDE / CLIMBING_SCALING; // screen pixels multiply by this -> texture coords
+pub const START_X: f64 = 300.0;
+pub const START_Y: f64 = 1.0; // coordinates where three starts
+pub const MONKEY_SCALING: f64 = 0.7; // 0.5 - monkey will be drawn smaller
+pub const CLIMBING_SCALING: f64 = 0.5; // also monkey scaling but for climbing
+pub const IMAGE_SIDE: f64 = 1024.0; //px
+pub const BODY_START_Y: f64 = 569.0 / IMAGE_SIDE;
+pub const BODY_CENTER_X: f64 = 1005.0 / IMAGE_SIDE;
+const BODY_DELTA_X_PX: f64 = 12.0; // px on texture
+pub const BODY_SEMI_W_TO_DRAW: f64 = BODY_DELTA_X_PX * CLIMBING_SCALING;
+pub const PX_SCREEN_TO_MONKEY_TEXTURE: f64 = 1.0 / IMAGE_SIDE / CLIMBING_SCALING; // screen pixels multiply by this -> texture coords
 
 #[wasm_bindgen]
 extern "C" {
@@ -65,8 +65,8 @@ pub struct TreeUnit {
 #[derive(Debug)]
 #[derive(Clone)]
 struct Pos {
-    x: f32,
-    y: f32,
+    x: f64,
+    y: f64,
 }
 struct GlParameters {
     rect_count_index: Option<WebGlUniformLocation>,
@@ -86,11 +86,11 @@ enum MonkeyState {
 
 struct TreeGoal {
     tree_index: usize,
-    tree_height: f32,
+    tree_height: f64,
 }
 enum MonkeyGoal {
     Tree(TreeGoal),
-    Floor(f32),
+    Floor(f64),
 }
 struct Monkey {
     monkey_state: MonkeyState,
@@ -100,14 +100,14 @@ struct Monkey {
 }
 
 impl Monkey {
-    fn set_tree_goal(&mut self, tree_index: usize, tree_height:f32) {
+    fn set_tree_goal(&mut self, tree_index: usize, tree_height:f64) {
         let tree_goal = TreeGoal{
             tree_index,
             tree_height,
         };
         self.monkey_goal = MonkeyGoal::Tree(tree_goal);
     }
-    fn set_floor_goal(&mut self, x: f32) {
+    fn set_floor_goal(&mut self, x: f64) {
         self.monkey_goal = MonkeyGoal::Floor(x);
     }
 }
@@ -118,8 +118,8 @@ struct TreeStruct {
     tree_state: TreeState,
     tree_for_climbing: Vec<monkey_climbing::TreeElForClimbing>,
     limbs_vec: Vec<monkey_climbing::LimbsPos>,
-    x_start: f32,
-    y_start: f32,
+    x_start: f64,
+    y_start: f64,
     monkey_climbing: monkey_climbing::MonkeyClimbing,
     tree_index: usize,
     body_params_vec: Vec<f32>,
@@ -128,7 +128,7 @@ struct TreeStruct {
 }
 
 impl TreeStruct {
-    fn new(x_start: f32, y_start: f32, tree_index: usize) -> TreeStruct {
+    fn new(x_start: f64, y_start: f64, tree_index: usize) -> TreeStruct {
         TreeStruct {
             tree: vec![],
             joined_tree: vec![],
@@ -149,13 +149,13 @@ impl TreeStruct {
         self.tree.push(TreeUnit{left, right, repeats: 1})
     }
 
-    fn update_tree_for_climbing(&mut self, straight_up_dist: f32, straight_down_dist: f32) {
+    fn update_tree_for_climbing(&mut self, straight_up_dist: f64, straight_down_dist: f64) {
         self.make_tree_for_climbing(straight_up_dist,
                                     straight_down_dist);
         self.generate_arms_legs_vectors();
     }
 
-    pub fn grow_tree(&mut self, straight_up_dist: f32, straight_down_dist: f32) {
+    pub fn grow_tree(&mut self, straight_up_dist: f64, straight_down_dist: f64) {
         let left = self.tree_state.left;
         let right = self.tree_state.right;
         let last = self.tree.last_mut();
@@ -172,7 +172,7 @@ impl TreeStruct {
         self.update_tree_for_climbing(straight_up_dist, straight_down_dist);
     }
 
-    pub fn undo_grow_tree(&mut self, straight_up_dist: f32, straight_down_dist: f32) {
+    pub fn undo_grow_tree(&mut self, straight_up_dist: f64, straight_down_dist: f64) {
         let last = self.tree.last_mut();
         match last {
             Some(last) => {
@@ -195,7 +195,7 @@ pub struct GameState {
     drawing_params: tree::DrawingParams,
     context: WebGl2RenderingContext,
     ubos_arr: [[f32; BUF_LENGTH]; NUM_UNIFORM_ARRAYS],
-    canvas_width: f32,
+    canvas_width: f64,
     gl_params: GlParameters,
     monkey_running_program: Option<WebGlProgram>,
     leaf_program: Option<WebGlProgram>,
@@ -206,8 +206,8 @@ pub struct GameState {
     background_framebuffer: Option<WebGlFramebuffer>,
     background_program: Option<WebGlProgram>,
     background_vao: Option<WebGlVertexArrayObject>,
-    straight_up_dist: f32,
-    straight_down_dist: f32,
+    straight_up_dist: f64,
+    straight_down_dist: f64,
     monkey_climbing_program: Option<WebGlProgram>,
     height_index:Option<WebGlUniformLocation>,
     monkey_climbing_program_body: Option<WebGlProgram>,
@@ -327,13 +327,13 @@ impl GameState {
                                          radius: f64,
                                          theta_max: f64,
                                          theta_min: f64,
-                                         width: f32,
-                                         height: f32,
-                                         frame_width: f32,
-                                         frame_height: f32,
+                                         width: f64,
+                                         height: f64,
+                                         frame_width: f64,
+                                         frame_height: f64,
                                          n_frames: i32,
-                                         time_loop: f32,
-                                         advance_loop: f32,) -> Result<(), JsValue> {
+                                         time_loop: f64,
+                                         advance_loop: f64,) -> Result<(), JsValue> {
         self.monkey.running.populate_parameters(width,
                                                          height,
                                                          frame_width,
@@ -424,7 +424,7 @@ impl GameState {
         let rects_count = tree_struct.populate_arr(drawing_params, ubos_arr);
         gl_related::bind_ubos_for_tree(&self.ubos_arr, &self.context, None, false)?;
         self.context.uniform1ui(self.gl_params.rect_count_index.as_ref(), rects_count as u32);
-        self.context.uniform1f(self.gl_params.canvas_w_index.as_ref(), self.canvas_width);
+        self.context.uniform1f(self.gl_params.canvas_w_index.as_ref(), self.canvas_width as f32);
         self.context.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, self.background_framebuffer.as_ref());
         self.context.viewport(0, 0, gl_related::TARGET_TEXTURE_WIDTH, gl_related::TARGET_TEXTURE_WIDTH);
         gl_related::draw(&self.context, 6, true, 0);
@@ -455,12 +455,12 @@ impl GameState {
         let tree_struct = &self.tree_structs[self.monkey.climbing_num];
         let height = tree_struct.get_monkey_max_height();
         let vert_count = tree_struct.monkey_climbing.vertex_arr.len() as i32 / 2;
-        self.context.uniform1f(self.height_index.as_ref(), height);
+        self.context.uniform1f(self.height_index.as_ref(), height as f32);
         gl_related::draw(&self.context, vert_count, false, 0);
 
         self.context.use_program(self.monkey_climbing_program_body.as_ref());
         self.context.bind_vertex_array(self.monkey_vao_climbing_body.as_ref());
-        self.context.uniform1f(self.height_index_body.as_ref(), height);
+        self.context.uniform1f(self.height_index_body.as_ref(), height as f32);
         tree_struct.set_params_body_climbing(
             &self.context,
             (self.ubo_buffer_climbing_body.as_ref()).unwrap());
@@ -473,7 +473,7 @@ impl GameState {
     }
 
     #[wasm_bindgen]
-    pub fn onclick(&mut self, x_click: f32, y_click: f32) {
+    pub fn onclick(&mut self, x_click: f64, y_click: f64) {
         for tree_struct in self.tree_structs.iter().rev() {
             match tree_struct.get_dest_on_click(x_click, y_click) {
                 Some(val) => {
@@ -520,7 +520,7 @@ impl GameState {
     }
 
     #[wasm_bindgen]
-    pub fn on_animation_frame(&mut self, deltat: f32) -> Result<(), JsValue> {
+    pub fn on_animation_frame(&mut self, deltat: f64) -> Result<(), JsValue> {
         match self.monkey.monkey_state {
             MonkeyState::Running => {
                 self.monkey.running.on_animation_frame(deltat);
@@ -592,12 +592,12 @@ impl GameState {
     }
 }
 
-fn get_circle_vertical_intersection(r: f32, x: f32) -> f32 {
+fn get_circle_vertical_intersection(r: f64, x: f64) -> f64 {
     // center of coordinates at circle's center, vertical straight line 
     (r*r - x*x).sqrt()
 }
 
-fn get_straight_extended_length() -> (f32, f32) {
+fn get_straight_extended_length() -> (f64, f64) {
     let r_arm_extended = monkey_climbing::ARM_SEGMENT_LENGTH * monkey_climbing::LEG_EXTENSION_COEFFICIENT;
     let r_leg_extended = monkey_climbing::LEG_SEGMENT_LENGTH * monkey_climbing::LEG_EXTENSION_COEFFICIENT;
     let deltax_arm = monkey_climbing::W / 2.0 - monkey_climbing::DELTAX_FRONT;
@@ -615,27 +615,27 @@ impl Pos {
         }
     }
 
-    fn multiply(&self, multiplier: f32) -> Pos {
+    fn multiply(&self, multiplier: f64) -> Pos {
         Pos {
             x: self.x * multiplier,
             y: self.y * multiplier
         }
     }
 
-    fn scalar_multiply(&self, other: &Pos) -> f32 {
+    fn scalar_multiply(&self, other: &Pos) -> f64 {
         return self.x * other.x + self.y * other.y;
     }
 
-    fn distance_squared(&self, other: &Pos) -> f32 {
+    fn distance_squared(&self, other: &Pos) -> f64 {
         let dif = self.add(&other.multiply(-1.0));
         dif.scalar_multiply(&dif) 
     }
 
-    fn distance(&self, other: &Pos) -> f32 {
+    fn distance(&self, other: &Pos) -> f64 {
         self.distance_squared(other).sqrt()
     }
 
-    fn cross_product(&self, other: &Pos) -> f32 {
+    fn cross_product(&self, other: &Pos) -> f64 {
         self.x * other.y - self.y * other.x
     }
 }
@@ -651,7 +651,7 @@ impl tree_contours::Figure {
                 let delta_hor = Pos {
                     x: segment.angle_start.cos(),
                     y: segment.angle_start.sin()
-                }.multiply((DEST_REF as f32) / 2.0);
+                }.multiply((DEST_REF as f64) / 2.0);
                 let delta_vert = Pos {
                     x: -segment.angle_start.sin(),
                     y: segment.angle_start.cos()
@@ -687,15 +687,15 @@ impl tree_contours::Figure {
                     if segment.right == 0 || segment.left == 0 {
                         let circle = tree_contours::Circle::new(
                             center,
-                            DEST_REF as f32,
+                            DEST_REF as f64,
                             true,
                         );
                         let contour = tree_contours::Contour::new_from_circle(
                             circle);
                         return tree_contours::Figure::new_from_contours(vec![contour]);
                     } else {
-                        let inner_radius = not_linear.radius.abs() - (DEST_REF as f32) * 0.5;
-                        let outer_radius = not_linear.radius.abs() + (DEST_REF as f32) * 0.5;
+                        let inner_radius = not_linear.radius.abs() - (DEST_REF as f64) * 0.5;
+                        let outer_radius = not_linear.radius.abs() + (DEST_REF as f64) * 0.5;
                         let circle_inner = tree_contours::Circle::new(
                             center.clone(),
                             inner_radius,
@@ -722,8 +722,8 @@ impl tree_contours::Figure {
                         angle_start = segment.angle_start;
                         angle_stop = not_linear.angle_stop;
                     } else {
-                        angle_start = not_linear.angle_stop + std::f32::consts::PI * 0.5;
-                        angle_stop = segment.angle_start + std::f32::consts::PI * 0.5;
+                        angle_start = not_linear.angle_stop + std::f64::consts::PI * 0.5;
+                        angle_stop = segment.angle_start + std::f64::consts::PI * 0.5;
                     }
                     let unit_start = Pos{
                         x: angle_start.cos(),
@@ -736,7 +736,7 @@ impl tree_contours::Figure {
                     let lines;
                     let points;
                     if segment.right == 0 || segment.left == 0 {
-                        let radius = DEST_REF as f32;
+                        let radius = DEST_REF as f64;
                         let dif_start = unit_start.multiply(radius);
                         let dif_stop = unit_stop.multiply(radius);
                         let p1 = center.add(&dif_start);
@@ -750,8 +750,8 @@ impl tree_contours::Figure {
                         lines = vec![line1, arc, line2];
                         points = vec![center, p1, p2];
                     } else {
-                        let inner_radius = not_linear.radius.abs() - (DEST_REF as f32) * 0.5;
-                        let outer_radius = not_linear.radius.abs() + (DEST_REF as f32) * 0.5;
+                        let inner_radius = not_linear.radius.abs() - (DEST_REF as f64) * 0.5;
+                        let outer_radius = not_linear.radius.abs() + (DEST_REF as f64) * 0.5;
                         let dif_start_inner = unit_start.multiply(inner_radius);
                         let dif_stop_inner = unit_stop.multiply(inner_radius);
                         let p1 = center.add(&dif_start_inner);

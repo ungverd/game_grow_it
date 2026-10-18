@@ -1,33 +1,33 @@
-pub const MONKEY_START_X: f32 = 200.0;
-pub const MONKEY_START_Y: f32 = 1.0;
+pub const MONKEY_START_X: f64 = 200.0;
+pub const MONKEY_START_Y: f64 = 1.0;
 
 pub struct MonkeyRunning {
-    x_pos: f32,
-    y_pos: f32,
+    x_pos: f64,
+    y_pos: f64,
     pub is_running: bool,
     is_left: bool,
     pub parameters: MonkeyRunningDrawParameters,
     pub vertex_arr: [f32; 12],
     pub texture_arr: [f32; 12],
-    start_x: f32,
-    desired_x: f32,
+    start_x: f64,
+    desired_x: f64,
 }
 
 pub struct MonkeyRunningDrawParameters {
-    monkey_width: f32,
-    monkey_height: f32,
-    width_screen: f32,
-    height_screen: f32,
-    width_to_draw: f32,
-    height_to_draw: f32,
-    texture_width: f32,
-    texture_height: f32,
+    monkey_width: f64,
+    monkey_height: f64,
+    width_screen: f64,
+    height_screen: f64,
+    width_to_draw: f64,
+    height_to_draw: f64,
+    texture_width: f64,
+    texture_height: f64,
     n_frames_running: i32,
-    loop_duration: f32,
-    advancement_px: f32, // number of pixels monkey will advance during one animation loop
+    loop_duration: f64,
+    advancement_px: f64, // number of pixels monkey will advance during one animation loop
     number_horizontal: i32,
     number_vertical: i32,
-    pub v: f32,
+    pub v: f64,
 }
 
 impl MonkeyRunning {
@@ -61,13 +61,13 @@ impl MonkeyRunning {
         }
     } 
     pub fn populate_parameters(&mut self,
-                               width: f32,
-                               height: f32,
-                               frame_width: f32,
-                               frame_height: f32,
+                               width: f64,
+                               height: f64,
+                               frame_width: f64,
+                               frame_height: f64,
                                n_frames: i32,
-                               time_loop: f32,
-                               advance_loop: f32,) {
+                               time_loop: f64,
+                               advance_loop: f64,) {
         self.parameters.texture_width = width;
         self.parameters.texture_height = height;
         self.parameters.monkey_width = frame_width;
@@ -84,13 +84,13 @@ impl MonkeyRunning {
         self.parameters.v = self.parameters.advancement_px / time_loop;
     }
 
-    fn calculate_hor_vert_frame(&self, frame_number: i32) -> (f32, f32) {
+    fn calculate_hor_vert_frame(&self, frame_number: i32) -> (f64, f64) {
         let vertical = frame_number / self.parameters.number_horizontal;
         let horizontal = frame_number % self.parameters.number_horizontal;
-        (horizontal as f32, vertical as f32)
+        (horizontal as f64, vertical as f64)
     }
 
-    pub fn set_goal(&mut self, new_x: f32) {
+    pub fn set_goal(&mut self, new_x: f64) {
         if new_x != self.x_pos {
             self.desired_x = new_x;
             let new_is_left = new_x < self.x_pos;
@@ -102,7 +102,7 @@ impl MonkeyRunning {
         }
     }
 
-    pub fn on_animation_frame(&mut self, deltat: f32) {
+    pub fn on_animation_frame(&mut self, deltat: f64) {
         //crate::log(&format!("deltat {:?}", deltat));
         if self.is_running {
             self.calculate_new_x(deltat);
@@ -123,7 +123,7 @@ impl MonkeyRunning {
         self.is_running = false;
     }
 
-    fn calculate_new_x(&mut self, deltat: f32) {
+    fn calculate_new_x(&mut self, deltat: f64) {
         if self.is_left {
             let new_x = self.x_pos - deltat * self.parameters.v;
             if new_x <= self.desired_x {
@@ -144,21 +144,21 @@ impl MonkeyRunning {
     fn calculate_frame_number(&self) -> i32 {
         let total_deltax = (self.start_x - self.x_pos).abs();
         let one_cycle_delta = (total_deltax / self.parameters.advancement_px).fract();
-        let frame_f = (one_cycle_delta * (self.parameters.n_frames_running as f32)).floor();
+        let frame_f = (one_cycle_delta * (self.parameters.n_frames_running as f64)).floor();
         frame_f as i32
     }
 
-    fn refresh_arrays(&mut self, monkey_frame_hor: f32, monkey_frame_vert: f32) {
+    fn refresh_arrays(&mut self, monkey_frame_hor: f64, monkey_frame_vert: f64) {
         let x_left = (self.x_pos - self.parameters.width_to_draw / 2.0) * 2.0 / self.parameters.width_screen - 1.0;
         let x_right = (self.x_pos + self.parameters.width_to_draw / 2.0) * 2.0 / self.parameters.width_screen - 1.0;
         let y_bottom = self.y_pos * 2.0 / self.parameters.height_screen - 1.0;
         let y_top = (self.y_pos + self.parameters.height_to_draw) * 2.0 / self.parameters.height_screen - 1.0;
-        self.vertex_arr = [x_left,  y_bottom,
-                           x_right, y_bottom,
-                           x_left,  y_top,
-                           x_right, y_bottom,
-                           x_right, y_top,
-                           x_left,  y_top,];
+        self.vertex_arr = [x_left as f32,  y_bottom as f32,
+                           x_right as f32, y_bottom as f32,
+                           x_left as f32,  y_top as f32,
+                           x_right as f32, y_bottom as f32,
+                           x_right as f32, y_top as f32,
+                           x_left as f32,  y_top as f32,];
         let mut x_coord_left = monkey_frame_hor * self.parameters.monkey_width / self.parameters.texture_width; 
         let mut x_coord_right = ((monkey_frame_hor + 1.0) * self.parameters.monkey_width - 1.0) / self.parameters.texture_width; 
         let y_coord_bottom = monkey_frame_vert * self.parameters.monkey_height / self.parameters.texture_height; 
@@ -166,15 +166,15 @@ impl MonkeyRunning {
         if self.is_left {
             (x_coord_left, x_coord_right) = (x_coord_right, x_coord_left);
         }
-        self.texture_arr = [x_coord_left,  y_coord_bottom,
-                           x_coord_right, y_coord_bottom,
-                           x_coord_left,  y_coord_top,
-                           x_coord_right, y_coord_bottom,
-                           x_coord_right, y_coord_top,
-                           x_coord_left,  y_coord_top,];
+        self.texture_arr = [x_coord_left as f32,  y_coord_bottom as f32,
+                           x_coord_right as f32, y_coord_bottom as f32,
+                           x_coord_left as f32,  y_coord_top as f32,
+                           x_coord_right as f32, y_coord_bottom as f32,
+                           x_coord_right as f32, y_coord_top as f32,
+                           x_coord_left as f32,  y_coord_top as f32,];
     }
 
-    pub fn set_on_pos(&mut self, x: f32, y: f32) {
+    pub fn set_on_pos(&mut self, x: f64, y: f64) {
         self.x_pos = x;
         self.y_pos = y;
         self.is_running = false;
@@ -182,7 +182,7 @@ impl MonkeyRunning {
         self.start_x = x;
     }
 
-    pub fn set_on_pos_with_dest(&mut self, x: f32, y:f32, desired_x: f32) {
+    pub fn set_on_pos_with_dest(&mut self, x: f64, y:f64, desired_x: f64) {
         self.x_pos = x;
         self.y_pos = y;
         self.is_running = true;

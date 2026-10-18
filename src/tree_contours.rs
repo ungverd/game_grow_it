@@ -1,6 +1,6 @@
-use std::f32::MIN;
+use std::f64::MIN;
 
-const MIN_DELTA: f32 = 0.0001;
+const MIN_DELTA: f64 = 0.0001;
 
 pub struct LineSegment {
     point1: crate::Pos,
@@ -9,14 +9,14 @@ pub struct LineSegment {
 
 pub struct Arc {
     center: crate::Pos,
-    radius: f32,
-    angle_start: f32,
-    angle_stop: f32,
+    radius: f64,
+    angle_start: f64,
+    angle_stop: f64,
 }
 
 pub struct Circle {
     center: crate::Pos,
-    radius: f32,
+    radius: f64,
     is_outer: bool,
 }
 
@@ -49,7 +49,7 @@ impl LineSegment {
 }
 
 impl Arc {
-    pub fn new(center: crate::Pos, radius: f32, angle_start:f32, angle_stop:f32) -> Arc {
+    pub fn new(center: crate::Pos, radius: f64, angle_start:f64, angle_stop:f64) -> Arc {
         Arc {
             center,
             radius,
@@ -60,7 +60,7 @@ impl Arc {
 }
 
 impl Circle {
-    pub fn new(center: crate::Pos, radius: f32, is_outer: bool) -> Circle {
+    pub fn new(center: crate::Pos, radius: f64, is_outer: bool) -> Circle {
         Circle {
             center,
             radius,
@@ -194,12 +194,12 @@ fn check_same_point(p1: &crate::Pos, p2: &crate::Pos) -> bool {
     dif.x.abs() < MIN_DELTA && dif.y.abs() < MIN_DELTA
 }
 
-fn get_y_circles(x1: f32,
-                 x2: f32,
-                 y1: f32,
-                 y2: f32,
-                 r1: f32,
-                 r2: f32) -> Option<(f32, f32)> {
+fn get_y_circles(x1: f64,
+                 x2: f64,
+                 y1: f64,
+                 y2: f64,
+                 r1: f64,
+                 r2: f64) -> Option<(f64, f64)> {
     let a = 4. * ((y1 - y2).powi(2) + (x1 - x2).powi(2));
     let b = (-4.) * ((y1 - y2) * (y1.powi(2) - y2.powi(2) - r1.powi(2) + r2.powi(2)) + (y1 + y2) * (x1 + x2).powi(2));
     let c = ((y1.powi(2) - r1.powi(2)) - (x1 - x2).powi(2) - (y2.powi(2) - r2.powi(2))).powi(2) + 4. * (y1.powi(2) - r1.powi(2)) * (x1 - x2).powi(2);
@@ -219,17 +219,17 @@ fn get_y_circles(x1: f32,
     }
 }
 
-fn get_x_circles(x1: f32, x2: f32, y1: f32, y2: f32, r1: f32, r2: f32) -> Option<(f32, f32)> {
+fn get_x_circles(x1: f64, x2: f64, y1: f64, y2: f64, r1: f64, r2: f64) -> Option<(f64, f64)> {
     get_y_circles(y1, y2, x1, x2, r1, r2)
 }
 
-fn get_y_circle_line(x1: f32,
-                     x2: f32,
-                     xc: f32,
-                     y1: f32,
-                     y2: f32,
-                     yc: f32,
-                     r: f32) -> Option<(f32, f32)> {
+fn get_y_circle_line(x1: f64,
+                     x2: f64,
+                     xc: f64,
+                     y1: f64,
+                     y2: f64,
+                     yc: f64,
+                     r: f64) -> Option<(f64, f64)> {
     let dify = y2 - y1;
     let difx = x2 - x1;
     let dify2 = dify.powi(2);
@@ -255,7 +255,7 @@ fn get_y_circle_line(x1: f32,
     }
 }
 
-fn get_x_circle_line(x1: f32, x2: f32, xc: f32, y1: f32, y2: f32, yc: f32, r: f32) -> Option<(f32, f32)> {
+fn get_x_circle_line(x1: f64, x2: f64, xc: f64, y1: f64, y2: f64, yc: f64, r: f64) -> Option<(f64, f64)> {
     get_y_circle_line(y1, y2, yc, x1, x2, xc, r)
 }
 
@@ -265,7 +265,7 @@ enum CircleIntersectionResult {
     TwoPoints((crate::Pos, crate::Pos))
 }
 
-fn intersect_circle_circle(c1: &crate::Pos, c2: &crate::Pos, r1: f32, r2: f32) -> CircleIntersectionResult {
+fn intersect_circle_circle(c1: &crate::Pos, c2: &crate::Pos, r1: f64, r2: f64) -> CircleIntersectionResult {
     // we assume here that centers are not same point
     let res = get_y_circles(c1.x, c2.x, c1.y, c2.y, r1, r2);
     match res {
@@ -295,7 +295,7 @@ fn intersect_circle_circle(c1: &crate::Pos, c2: &crate::Pos, r1: f32, r2: f32) -
     }
 }
 
-fn intersect_circle_line(c: &crate::Pos, r: f32, p1: &crate::Pos, p2: &crate::Pos) -> CircleIntersectionResult {
+fn intersect_circle_line(c: &crate::Pos, r: f64, p1: &crate::Pos, p2: &crate::Pos) -> CircleIntersectionResult {
     let res = get_y_circle_line(p1.x, p2.x, c.x, p1.y, p2.y, c.y, r);
     match res {
         None => {CircleIntersectionResult::None}
