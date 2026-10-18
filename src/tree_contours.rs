@@ -206,12 +206,12 @@ fn get_y_circles(x1: f64,
     let d = b.powi(2) - 4.*a*c;
     if d > 0.0 {
         let d_root = d.powf(0.5);
-        let y_1 = (-b + d_root) / 2. / a;
-        let y_2 = (-b - d_root) / 2. / a;
+        let y_1 = (-b + d_root) * 0.5 / a;
+        let y_2 = (-b - d_root) * 0.5 / a;
         Some((y_1, y_2))
     } else {
         if d.abs() < MIN_DELTA {
-            let y_1 = -b / 2. / a;
+            let y_1 = -b * 0.5 / a;
             Some((y_1, y_1))
         } else {
             None
@@ -242,12 +242,12 @@ fn get_y_circle_line(x1: f64,
 
     if d > 0. {
         let d_sqrt = d.powf(0.5);
-        let y_1 = (-b + d_sqrt) / 2. / a;
-        let y_2 = (-b - d_sqrt) / 2. / a;
+        let y_1 = (-b + d_sqrt) * 0.5 / a;
+        let y_2 = (-b - d_sqrt) * 0.5 / a;
         Some((y_1, y_2))
     } else {
         if d.abs() < MIN_DELTA {
-            let y_1 = -b / 2. / a;
+            let y_1 = -b * 0.5 / a;
             Some((y_1, y_1))
         } else {
             None
