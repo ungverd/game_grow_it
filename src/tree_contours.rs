@@ -1,6 +1,6 @@
 use std::f64::MIN;
 
-const MIN_DELTA: f64 = 0.0001;
+const MIN_DELTA: f64 = 0.000001;
 
 pub struct LineSegment {
     point1: crate::Pos,
@@ -321,6 +321,24 @@ fn intersect_circle_line(c: &crate::Pos, r: f64, p1: &crate::Pos, p2: &crate::Po
                 }
             }
         }
+    }
+}
+
+fn check_point_in_arc(arc: &Arc, p: &crate::Pos) -> Option<f64> {
+    // we assume here that point is at circle
+    let dif = p.add(&arc.center.multiply(-1.));
+    let angle_p = dif.y.atan2(dif.x);
+    let angle1 = (arc.angle_start - angle_p) * 0.5 / std::f64::consts::PI;
+    let angle2 = (arc.angle_stop - angle_p) * 0.5 / std::f64::consts::PI;
+    // if they ceil to the same number, there is no integer between them -> angle_p is not between our angles, 2pi repetitions adjusted
+    let angle1ceil = angle1.ceil();
+    let angle2ceil = angle2.ceil();
+    if angle1ceil == angle2ceil {
+        None
+    } else {
+        let asmall = if angle1ceil < angle2ceil {angle1ceil} else {angle2ceil};
+        let adjusted_p = angle_p + asmall * 2. * std::f64::consts::PI;
+        Some(adjusted_p)
     }
 }
 
