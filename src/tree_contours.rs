@@ -342,6 +342,64 @@ fn check_point_in_arc(arc: &Arc, p: &crate::Pos) -> Option<f64> {
     }
 }
 
+enum IntersectStraightResult {
+    Parallel,
+    Point(crate::Pos),
+    SameLine
+}
+
+fn get_y_line_line(x1: f64,
+                   x2: f64,
+                   x3: f64,
+                   x4: f64,
+                   y1: f64,
+                   y2: f64,
+                   y3: f64,
+                   y4: f64,
+                   divider: f64) -> f64 {
+    ((x3 * y4 - y3 * x4) * (y2 - y1) - (x1 * y2 - y1 * x2) * (y4 - y3)) / divider    
+}
+
+fn intersect_straight(p1: &crate::Pos,
+                      p2: &crate::Pos,
+                      p3: &crate::Pos,
+                      p4: &crate::Pos) -> IntersectStraightResult {
+    let divider = (p2.x - p1.x) * (p4.y - p3.y) * (p4.x - p3.x) * (p2.y - p1.y);
+    if divider.abs() < MIN_DELTA {
+        // Parallel or same line
+        let div_2 = (p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x);
+        if div_2.abs() < MIN_DELTA {
+            IntersectStraightResult::SameLine
+        } else {
+            IntersectStraightResult::Parallel
+        }
+    } else {
+        let y_intersect = get_y_line_line(p1.x,
+                                               p2.x,
+                                               p3.x,
+                                               p4.x,
+                                               p1.y,
+                                               p2.y,
+                                               p3.y,
+                                               p4.y,
+                                               divider);
+        let x_intersect = get_y_line_line(p1.y,
+                                               p2.y,
+                                               p3.y,
+                                               p4.y,
+                                               p1.x,
+                                               p2.x,
+                                               p3.x,
+                                               p4.x,
+                                               -divider);
+        let res = crate::Pos{
+            x: x_intersect,
+            y: y_intersect
+        };
+        IntersectStraightResult::Point(res)
+    }
+}
+
 fn check_intersect_arc_arc(arc1: &Arc, arc2: &Arc) {
     if check_same_point(&arc1.center, &arc2.center) {
 
