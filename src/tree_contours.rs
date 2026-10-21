@@ -183,10 +183,19 @@ impl FigureIntermediate {
         fp_obj.lines_stopping.append(&mut sp_obj.lines_stopping);
     }
 
-    fn make_intersections(&mut self) {
-        let was_there_difference = false;
+    fn merge_and_clean(&mut self) {
 
-    } 
+    }
+    
+    fn merge_points_and_clean(&mut self, start_i: usize) {
+        for (i, p1) in self.points[start_i..self.points.len() - 1].enumerate() {
+            for p2 in self.points[start_i + i + 1..] {
+                
+            }
+            
+        }
+
+    }
 }
 
 fn check_same_point(p1: &crate::Pos, p2: &crate::Pos) -> bool {
@@ -398,6 +407,25 @@ fn intersect_straight(p1: &crate::Pos,
         };
         IntersectStraightResult::Point(res)
     }
+}
+
+fn point_on_line(p1: &crate::Pos, p2: &crate::Pos, p: &crate::Pos) -> bool {
+    ((p.x - p1.x) * (p2.y - p1.y) - (p.y - p1.y) * (p2.x - p1.x)).abs() < MIN_DELTA
+}
+
+fn point_on_circle(p: &crate::Pos, c: &crate::Pos, r: f64) -> bool {
+    p.distance_squared(&c) - r * r < MIN_DELTA
+}
+
+fn check_point_on_segment_line(p: &crate::Pos, p1: &crate::Pos, p2: &crate::Pos) -> bool {
+    // we assume point is on line
+    let minus_p = p.multiply(-1.);
+    let v1 = p1.add(&minus_p);
+    let v2 = p2.add(&minus_p);
+    let su = v1.add(&v2);
+    let dist_between_points_squared = p1.distance_squared(&p2);
+    let sum_squared = su.length_squared();
+    sum_squared < dist_between_points_squared
 }
 
 fn check_intersect_arc_arc(arc1: &Arc, arc2: &Arc) {

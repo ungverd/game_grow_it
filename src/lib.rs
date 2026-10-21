@@ -623,7 +623,7 @@ impl Pos {
     }
 
     fn scalar_multiply(&self, other: &Pos) -> f64 {
-        return self.x * other.x + self.y * other.y;
+        self.x * other.x + self.y * other.y
     }
 
     fn distance_squared(&self, other: &Pos) -> f64 {
@@ -637,6 +637,14 @@ impl Pos {
 
     fn cross_product(&self, other: &Pos) -> f64 {
         self.x * other.y - self.y * other.x
+    }
+
+    fn length_squared(&self) -> f64 {
+        self.scalar_multiply(&self)
+    }
+
+    fn length(&self) -> f64 {
+        self.length_squared().sqrt()
     }
 }
 
