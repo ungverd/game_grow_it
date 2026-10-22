@@ -184,7 +184,45 @@ impl FigureIntermediate {
     }
 
     fn merge_point_line(&mut self, res: ComparePointsLinesResult) {
+        let len_before = self.lines.len();
+        match res {
+            ComparePointsLinesResult::None => {}
+            ComparePointsLinesResult::PointArc((p_n, arc_n, angle)) => {
+                let arc = self.lines.swap_remove(arc_n);
+                match arc.line {
+                    Line::Segment(seg) => {}
+                    Line::Arc(inner_arc) => {
+                        let new_arc_1 = Arc::new(inner_arc.center.clone(), inner_arc.radius, inner_arc.angle_start, angle);
+                        let new_arc_2 = Arc::new(inner_arc.center.clone(), inner_arc.radius, angle, inner_arc.angle_stop);
+                        let line1 = Line::Arc(new_arc_1);
+                        let line2 = Line::Arc(new_arc_2);
+                        let for_interm1 = LineForIntermediate{
+                            start_point_index: arc.start_point_index,
+                            stop_point_index: p_n,
+                            line: line1
+                        };
+                        let for_interm2 = LineForIntermediate{
+                            start_point_index: p_n,
+                            stop_point_index: arc.stop_point_index,
+                            line: line2
+                        };
+                        self.lines.push(for_interm1);
+                        self.lines.push(for_interm2);
+                    }
+                }
+                for (point_number, point) in &mut self.points.iter_mut().enumerate() {
+                    if point_number == p_n {
+                        point.lines_starting.push(len_before);
+                        point.lines_stopping.push(len_before - 1);
+                    }
+                    // TODO!!!
+                }
+                let point = &mut self.points[p_n];
+            }
+            ComparePointsLinesResult::PointSegment((p_n, seg_n)) => {
 
+            }
+        }
     }
 
     fn merge_and_clean(&mut self) {
@@ -212,24 +250,26 @@ impl FigureIntermediate {
         for (counter, p) in self.points[start_i_point..].iter().enumerate() {
             let i = counter + start_i_point;
             for (j, line) in self.lines.iter().enumerate() {
-                match &line.line {
-                    Line::Segment(seg) => {
-                        if point_on_line(&seg.point1, &seg.point2, &p.pos) {
-                            if check_point_on_segment_line(&p.pos, &seg.point1, &seg.point2) {
-                                return ComparePointsLinesResult::PointSegment((i, j));
+                if i != line.start_point_index && i != line.stop_point_index {
+                    match &line.line {
+                        Line::Segment(seg) => {
+                            if point_on_line(&seg.point1, &seg.point2, &p.pos) {
+                                if check_point_on_segment_line(&p.pos, &seg.point1, &seg.point2) {
+                                    return ComparePointsLinesResult::PointSegment((i, j));
+                                }
                             }
                         }
-                    }
-                    Line::Arc(arc) => {
-                        if point_on_circle(&p.pos, &arc.center, arc.radius) {
-                            let res = check_point_in_arc(&arc, &p.pos);
-                            match res {
-                                Some(angle) => {
-                                    return ComparePointsLinesResult::PointArc((i, j, angle));
+                        Line::Arc(arc) => {
+                            if point_on_circle(&p.pos, &arc.center, arc.radius) {
+                                let res = check_point_in_arc(&arc, &p.pos);
+                                match res {
+                                    Some(angle) => {
+                                        return ComparePointsLinesResult::PointArc((i, j, angle));
+                                    }
+                                    None => {}
                                 }
-                                None => {}
-                            }
-                        } 
+                            } 
+                        }
                     }
                 }
             }
