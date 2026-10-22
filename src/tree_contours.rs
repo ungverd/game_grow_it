@@ -183,19 +183,78 @@ impl FigureIntermediate {
         fp_obj.lines_stopping.append(&mut sp_obj.lines_stopping);
     }
 
-    fn merge_and_clean(&mut self) {
+    fn merge_point_line(&mut self, res: ComparePointsLinesResult) {
 
     }
-    
-    fn merge_points_and_clean(&mut self, start_i: usize) {
-        for (i, p1) in self.points[start_i..self.points.len() - 1].enumerate() {
-            for p2 in self.points[start_i + i + 1..] {
-                
+
+    fn merge_and_clean(&mut self) {
+        let mut finished = false;
+        while !finished {
+            let mut finished_points = false;
+            let mut start_i = 0;
+            while !finished_points {
+                let res = self.compare_points(start_i);
+                match res {
+                    None => {
+                        finished_points = true;
+                    }
+                    Some((p1, p2)) => {
+                        self.merge_points(p1, p2);
+                        start_i = p1;
+                    }
+                }
             }
-            
         }
 
     }
+
+    fn compare_points_lines(&self, start_i_point: usize) -> ComparePointsLinesResult {
+        for (counter, p) in self.points[start_i_point..].iter().enumerate() {
+            let i = counter + start_i_point;
+            for (j, line) in self.lines.iter().enumerate() {
+                match &line.line {
+                    Line::Segment(seg) => {
+                        if point_on_line(&seg.point1, &seg.point2, &p.pos) {
+                            if check_point_on_segment_line(&p.pos, &seg.point1, &seg.point2) {
+                                return ComparePointsLinesResult::PointSegment((i, j));
+                            }
+                        }
+                    }
+                    Line::Arc(arc) => {
+                        if point_on_circle(&p.pos, &arc.center, arc.radius) {
+                            let res = check_point_in_arc(&arc, &p.pos);
+                            match res {
+                                Some(angle) => {
+                                    return ComparePointsLinesResult::PointArc((i, j, angle));
+                                }
+                                None => {}
+                            }
+                        } 
+                    }
+                }
+            }
+        }
+        ComparePointsLinesResult::None
+    }
+    
+    fn compare_points(&self, start_i: usize) -> Option<(usize, usize)> {
+        for (counter, p1) in self.points[start_i..self.points.len() - 1].iter().enumerate() {
+            let i = counter + start_i;
+            for (counter2, p2) in self.points[i + 1..].iter().enumerate() {
+                let j = i + 1 + counter2;
+                if check_same_point(&p1.pos, &p2.pos) {
+                    return Some((i, j));
+                }
+            }
+        }
+        None
+    }
+}
+
+enum ComparePointsLinesResult {
+    None,
+    PointSegment((usize, usize)),
+    PointArc((usize, usize, f64)) // point, arc, angle
 }
 
 fn check_same_point(p1: &crate::Pos, p2: &crate::Pos) -> bool {
@@ -430,6 +489,11 @@ fn check_point_on_segment_line(p: &crate::Pos, p1: &crate::Pos, p2: &crate::Pos)
 
 fn check_intersect_arc_arc(arc1: &Arc, arc2: &Arc) {
     if check_same_point(&arc1.center, &arc2.center) {
+        if arc1.radius - arc2.radius < MIN_DELTA {
+
+        } else {
+            // return None
+        }
 
     } else {
 
