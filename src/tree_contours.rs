@@ -355,7 +355,7 @@ fn get_y_circles(x1: f64,
     let c = ((y1.powi(2) - r1.powi(2)) - (x1 - x2).powi(2) - (y2.powi(2) - r2.powi(2))).powi(2) + 4. * (y1.powi(2) - r1.powi(2)) * (x1 - x2).powi(2);
     let d = b.powi(2) - 4.*a*c;
     if d > 0.0 {
-        let d_root = d.powf(0.5);
+        let d_root = d.sqrt();
         let y_1 = (-b + d_root) * 0.5 / a;
         let y_2 = (-b - d_root) * 0.5 / a;
         Some((y_1, y_2))
@@ -391,7 +391,7 @@ fn get_y_circle_line(x1: f64,
     let d = b.powi(2) - 4. * a * c;
 
     if d > 0. {
-        let d_sqrt = d.powf(0.5);
+        let d_sqrt = d.sqrt();
         let y_1 = (-b + d_sqrt) * 0.5 / a;
         let y_2 = (-b - d_sqrt) * 0.5 / a;
         Some((y_1, y_2))
