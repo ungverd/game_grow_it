@@ -1,3 +1,4 @@
+use core::f64;
 use std::f64::MIN;
 
 const MIN_DELTA: f64 = 0.000001;
@@ -118,7 +119,6 @@ impl FigureIntermediate {
         let mut lines = vec![];
         let mut points = vec![];
         let mut circles = vec![];
-        // TODO: if inner cercle and outer circle are of the same center and radius, they collapse
         for fig in [fig_1, fig_2] {
             for contour in fig.contours {
                 match contour {
@@ -232,87 +232,149 @@ impl FigureIntermediate {
         }
     }
 
+    fn arrange_two_lines_from_one(&mut self,
+                                  old_line: LineForIntermediate,
+                                  line_n:usize,
+                                  line1: Line,
+                                  line2: Line,
+                                  len_before: usize,
+                                  p_n: usize) {
+        let for_interm1 = LineForIntermediate{
+            start_point_index: old_line.start_point_index,
+            stop_point_index: p_n,
+            line: line1
+        };
+        let for_interm2 = LineForIntermediate{
+            start_point_index: p_n,
+            stop_point_index: old_line.stop_point_index,
+            line: line2
+        };
+        self.lines.push(for_interm1);
+        self.lines.push(for_interm2);
+        self.clean_points_after_merge_point_line(line_n, len_before, p_n);
+    }
+
     fn merge_point_line(&mut self, res: ComparePointsLinesResult) {
         let len_before = self.lines.len();
         match res {
             ComparePointsLinesResult::None => {}
             ComparePointsLinesResult::PointArc((p_n, arc_n, angle)) => {
                 let arc = self.lines.swap_remove(arc_n);
-                match arc.line {
+                match &arc.line {
                     Line::Segment(_seg) => {}
                     Line::Arc(inner_arc) => {
                         let new_arc_1 = Arc::new(inner_arc.center.clone(), inner_arc.radius, inner_arc.angle_start, angle);
                         let new_arc_2 = Arc::new(inner_arc.center.clone(), inner_arc.radius, angle, inner_arc.angle_stop);
                         let line1 = Line::Arc(new_arc_1);
                         let line2 = Line::Arc(new_arc_2);
-                        let for_interm1 = LineForIntermediate{
-                            start_point_index: arc.start_point_index,
-                            stop_point_index: p_n,
-                            line: line1
-                        };
-                        let for_interm2 = LineForIntermediate{
-                            start_point_index: p_n,
-                            stop_point_index: arc.stop_point_index,
-                            line: line2
-                        };
-                        self.lines.push(for_interm1);
-                        self.lines.push(for_interm2);
-                        self.clean_points_after_merge_point_line(arc_n, len_before, p_n);
+                        self.arrange_two_lines_from_one(arc, arc_n, line1, line2, len_before, p_n);
                     }
                 }            
             }
             ComparePointsLinesResult::PointSegment((p_n, seg_n)) => {
-                // TODO!!!
+                let seg = self.lines.swap_remove(seg_n);
+                match &seg.line {
+                    Line::Arc(_arc) => {}
+                    Line::Segment(inner_seg) => {
+                        let new_pos = self.points[p_n].pos.clone();
+                        let new_line1 = LineSegment::new(inner_seg.point1.clone(), new_pos.clone());
+                        let new_line2 = LineSegment::new(new_pos, inner_seg.point2.clone());
+                        let line1 = Line::Segment(new_line1);
+                        let line2 = Line::Segment(new_line2);
+                        self.arrange_two_lines_from_one(seg, seg_n, line1, line2, len_before, p_n);
+                    }
+                }
             }
         }
     }
 
     fn merge_and_clean(&mut self) {
-        let mut finished = false;
-        while !finished {
-            let mut finished_points = false;
-            let mut start_i = 0;
-            while !finished_points {
-                let res = self.compare_points(start_i);
-                match res {
-                    None => {
-                        finished_points = true;
-                    }
-                    Some((p1, p2)) => {
-                        self.merge_points(p1, p2);
-                        start_i = p1;
-                    }
+        let mut finished_points = false;
+        let mut start_i = 0;
+        while !finished_points {
+            let res = self.compare_points(start_i);
+            match res {
+                None => {
+                    finished_points = true;
+                }
+                Some((p1, p2)) => {
+                    self.merge_points(p1, p2);
+                    start_i = p1;
                 }
             }
         }
+        let mut finished_points_lines = false;
+        let mut start_i_point = 0;
+        while !finished_points_lines {
+            let res = self.compare_points_lines(start_i_point);
+            match res {
+                ComparePointsLinesResult::None => {
+                    finished_points_lines = true;
+                }
+                ComparePointsLinesResult::PointArc((p_n, _, __)) => {
+                    self.merge_point_line(res);
+                    start_i_point = p_n;
+                }
+                ComparePointsLinesResult::PointSegment((p_n, _)) => {
+                    self.merge_point_line(res);
+                    start_i_point = p_n;
+                }
+            }
+        }
+        let mut finished_points_circles = false;
+        start_i_point = 0;
+        while !finished_points_circles {
+            let res = self.compare_points_circles(start_i_point);
+            match res {
+                None => {
+                    finished_points_circles = true;
+                }
+                Some((p_n, c_n)) => {
+                    //TODO
+                    start_i_point = p_n;
+                }
+            }
+        }
+    }
 
+    fn merge_points_circle(&mut self, p_n: usize, c_n: usize) {
+        let pos = &self.points[p_n].pos;
+        let circle = self.circles.swap_remove(c_n);
+        let dif = pos.add(&circle.center.multiply(-1.));
+        let angle = dif.y.atan2(dif.x);
+        let new_arc = Arc::new(circle.center, circle.radius, angle - 2. * f64::consts::PI, angle);
+        let new_line = Line::Arc(new_arc);
+        let new_interm = LineForIntermediate {
+            start_point_index: p_n,
+            stop_point_index: p_n,
+            line: new_line
+        };
+        // TODO verify this new_interm collisions with other points!
+        //self.lines.push(new_interm);
+    }
+
+    fn compare_points_circles(&self, start_i_point: usize) -> Option<(usize, usize)> {
+        for (counter, p) in self.points[start_i_point..].iter().enumerate() {
+            let i = counter + start_i_point;
+            for (j, circle) in self.circles.iter().enumerate() {
+                if point_on_circle(&p.pos, &circle.center, circle.radius) {
+                    return Some((i, j));
+                }    
+            }
+        }
+        None
     }
 
     fn compare_points_lines(&self, start_i_point: usize) -> ComparePointsLinesResult {
         for (counter, p) in self.points[start_i_point..].iter().enumerate() {
             let i = counter + start_i_point;
             for (j, line) in self.lines.iter().enumerate() {
-                if i != line.start_point_index && i != line.stop_point_index {
-                    match &line.line {
-                        Line::Segment(seg) => {
-                            if point_on_line(&seg.point1, &seg.point2, &p.pos) {
-                                if check_point_on_segment_line(&p.pos, &seg.point1, &seg.point2) {
-                                    return ComparePointsLinesResult::PointSegment((i, j));
-                                }
-                            }
-                        }
-                        Line::Arc(arc) => {
-                            if point_on_circle(&p.pos, &arc.center, arc.radius) {
-                                let res = check_point_in_arc(&arc, &p.pos);
-                                match res {
-                                    Some(angle) => {
-                                        return ComparePointsLinesResult::PointArc((i, j, angle));
-                                    }
-                                    None => {}
-                                }
-                            } 
-                        }
+                let res = compare_point_line(i, j, p, line);
+                match res {
+                    ComparePointsLinesResult::PointArc(_) | ComparePointsLinesResult::PointSegment(_) => {
+                        return res;
                     }
+                    ComparePointsLinesResult::None => {}
                 }
             }
         }
@@ -332,6 +394,35 @@ impl FigureIntermediate {
         None
     }
 }
+
+fn compare_point_line(i: usize,
+                      j: usize,
+                      p: &PointForIntermediate,
+                      line: &LineForIntermediate) -> ComparePointsLinesResult {
+        if i != line.start_point_index && i != line.stop_point_index {
+            match &line.line {
+                Line::Segment(seg) => {
+                    if point_on_line(&seg.point1, &seg.point2, &p.pos) {
+                        if check_point_on_segment_line(&p.pos, &seg.point1, &seg.point2) {
+                            return ComparePointsLinesResult::PointSegment((i, j));
+                        }
+                    }
+                }
+                Line::Arc(arc) => {
+                    if point_on_circle(&p.pos, &arc.center, arc.radius) {
+                        let res = check_point_in_arc(&arc, &p.pos);
+                        match res {
+                            Some(angle) => {
+                                return ComparePointsLinesResult::PointArc((i, j, angle));
+                            }
+                            None => {}
+                        }
+                    } 
+                }
+            }
+        }
+        ComparePointsLinesResult::None
+    }
 
 enum ComparePointsLinesResult {
     None,
