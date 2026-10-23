@@ -306,7 +306,7 @@ impl FigureIntermediate {
         let mut finished_points_lines = false;
         let mut start_i_point = 0;
         while !finished_points_lines {
-            let res = self.compare_points_lines(start_i_point);
+            let res = self.compare_points_lines(start_i_point, 0);
             match res {
                 ComparePointsLinesResult::None => {
                     finished_points_lines = true;
@@ -330,7 +330,7 @@ impl FigureIntermediate {
                     finished_points_circles = true;
                 }
                 Some((p_n, c_n)) => {
-                    //TODO
+                    self.merge_points_circle(p_n, c_n);
                     start_i_point = p_n;
                 }
             }
@@ -338,6 +338,7 @@ impl FigureIntermediate {
     }
 
     fn merge_points_circle(&mut self, p_n: usize, c_n: usize) {
+        let len_lines_before = self.lines.len();
         let pos = &self.points[p_n].pos;
         let circle = self.circles.swap_remove(c_n);
         let dif = pos.add(&circle.center.multiply(-1.));
@@ -349,8 +350,22 @@ impl FigureIntermediate {
             stop_point_index: p_n,
             line: new_line
         };
-        // TODO verify this new_interm collisions with other points!
-        //self.lines.push(new_interm);
+        self.lines.push(new_interm);
+        let mut finished_points_lines = false;
+        let mut start_i_point = 0;
+        while !finished_points_lines {
+            let res = self.compare_points_lines(start_i_point, len_lines_before);
+            match res {
+                ComparePointsLinesResult::None => {
+                    finished_points_lines = true;
+                }
+                ComparePointsLinesResult::PointArc((p_n, _, _)) => {
+                    self.merge_point_line(res);
+                    start_i_point = p_n;
+                }
+                ComparePointsLinesResult::PointSegment(_) => {}// If we are here it's an error!
+            }
+        }
     }
 
     fn compare_points_circles(&self, start_i_point: usize) -> Option<(usize, usize)> {
@@ -365,10 +380,11 @@ impl FigureIntermediate {
         None
     }
 
-    fn compare_points_lines(&self, start_i_point: usize) -> ComparePointsLinesResult {
+    fn compare_points_lines(&self, start_i_point: usize, start_i_line: usize) -> ComparePointsLinesResult {
         for (counter, p) in self.points[start_i_point..].iter().enumerate() {
             let i = counter + start_i_point;
-            for (j, line) in self.lines.iter().enumerate() {
+            for (counter2, line) in self.lines[start_i_line..].iter().enumerate() {
+                let j = counter2 + start_i_line;
                 let res = compare_point_line(i, j, p, line);
                 match res {
                     ComparePointsLinesResult::PointArc(_) | ComparePointsLinesResult::PointSegment(_) => {
@@ -392,6 +408,16 @@ impl FigureIntermediate {
             }
         }
         None
+    }
+
+    fn compare_lines_lines(&self, start_i: usize) {
+        for (counter, l1) in self.lines[start_i..self.lines.len() - 1].iter().enumerate() {
+            let i = counter + start_i;
+            for (counter2, l2) in self.lines[i + 1..].iter().enumerate() {
+                let j = i + 1 + counter2;
+                // TODO
+            }
+        }
     }
 }
 
@@ -660,10 +686,31 @@ fn check_point_on_segment_line(p: &crate::Pos, p1: &crate::Pos, p2: &crate::Pos)
     sum_squared < dist_between_points_squared
 }
 
+enum IntersectArcArcResult {
+    None,
+    SameCircleParallel,
+    SameCircleAntiparallel,
+    TwoCirclesOnePoint((crate::Pos, f64, f64)),
+    TwoCirclesTwoPoints(((crate::Pos, f64, f64), (crate::Pos, f64, f64)))
+}
+
+enum IntersectSegmentArcResult {
+    None,
+    OnePoint((crate::Pos, f64)),
+    TwoPoints(((crate::Pos, f64), (crate::Pos, f64)))
+}
+
+enum IntersectSegmentSegmentResult {
+    None,
+    SameParallel,
+    SameAntiParallel,
+    Point(crate::Pos)
+}
+
 fn check_intersect_arc_arc(arc1: &Arc, arc2: &Arc) {
     if check_same_point(&arc1.center, &arc2.center) {
         if arc1.radius - arc2.radius < MIN_DELTA {
-
+            
         } else {
             // return None
         }
