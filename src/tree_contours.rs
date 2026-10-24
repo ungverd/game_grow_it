@@ -419,6 +419,136 @@ impl FigureIntermediate {
             }
         }
     }
+
+    fn check_intersect_line_line(&self, line1: &LineForIntermediate, line2: &LineForIntermediate) {
+        match &line1.line {
+            Line::Segment(seg1) => {
+                match &line2.line {
+                    Line::Segment(seg2) => {
+
+                    }
+                    Line::Arc(arc2) => {
+                        
+                    }
+                }
+            }
+            Line::Arc(arc1) => {            
+                match &line2.line {
+                    Line::Segment(seg2) => {
+
+                    }
+                    Line::Arc(arc2) => {
+                        
+                    }
+                }
+            }
+        }
+    }
+
+    fn check_intersect_arc_arc(&self,
+                               arc1: &Arc,
+                               arc1p1: usize,
+                               arc1p2: usize,
+                               arc2: &Arc,
+                               arc2p1: usize,
+                               arc2p2: usize) -> IntersectArcArcResult {
+        if check_same_point(&arc1.center, &arc2.center) {
+            if arc1.radius - arc2.radius < MIN_DELTA {
+                if arc1p1 == arc2p1 && arc1p2 == arc2p2 {
+                    if ((arc1.angle_stop - arc1.angle_start) > 0.) == ((arc2.angle_stop - arc2.angle_start) > 0.) {
+                        return IntersectArcArcResult::SameCircleParallel;
+                    } else {
+                        return IntersectArcArcResult::None;
+                    }
+                } else {
+                    if arc1p1 == arc2p2 && arc2p1 == arc1p2 {
+                        if ((arc1.angle_stop - arc1.angle_start) > 0.) != ((arc2.angle_stop - arc2.angle_start) > 0.) {
+                            return IntersectArcArcResult::SameCircleAntiparallel;
+                        } else {
+                            return IntersectArcArcResult::None;
+                        }
+                    } else {
+                        return IntersectArcArcResult::None;
+                    }
+                }
+            } else {
+                return IntersectArcArcResult::None;
+            }
+        } else {
+            if (arc1p1 == arc2p1 && arc1p2 == arc2p2) || (arc1p1 == arc2p2 && arc2p1 == arc1p2) {
+                return IntersectArcArcResult::None;
+            }
+            let mut one_point_common = None;
+            if arc1p1 == arc2p1 {one_point_common = Some(1)};
+            if arc1p2 == arc2p2 {one_point_common = Some(2)};
+            if arc1p1 == arc2p2 {one_point_common = Some(3)};
+            if arc2p1 == arc1p2 {one_point_common = Some(4)};
+            let res = intersect_circle_circle(&arc1.center, &arc2.center, arc1.radius, arc2.radius);
+            match res {
+                CircleIntersectionResult::None => {
+                    return IntersectArcArcResult::None;
+                }
+                CircleIntersectionResult::OnePoint(pos) => {
+                    /*let p1 = &self.points[arc1p1].pos;
+                    let p2 = &self.points[arc1p2].pos;
+                    let p3 = &self.points[arc2p1].pos;
+                    let p4 = &self.points[arc2p2].pos;
+                    for p in [p1, p2, p3, p4] {
+                        if check_same_point(&pos, p) {
+                            return IntersectArcArcResult::None;
+                        }
+                    }*/
+                    match one_point_common {
+                        None => {return IntersectArcArcResult::None;}
+                        Some(_) => {
+                            let at_arc1 = check_point_in_arc(arc1, &pos);
+                            match at_arc1 {
+                                None => {return IntersectArcArcResult::None;}
+                                Some(angle1) => {
+                                    let at_arc2 = check_point_in_arc(arc2, &pos);
+                                    match at_arc2 {
+                                        None => {return IntersectArcArcResult::None;}
+                                        Some(angle2) => {
+                                            return IntersectArcArcResult::TwoCirclesOnePoint((pos, angle1, angle2));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                CircleIntersectionResult::TwoPoints((pos1, pos2)) => {
+                    match one_point_common {
+                        None => { // arcs do not have common endpoint
+                            let at_arc1_p1 = check_point_in_arc(arc1, &pos1);
+                            match at_arc1_p1 {
+                                None => {
+                                    let at_arc1_p2 = check_point_in_arc(arc1, &pos2);
+                                    match at_arc1_p2 {
+                                        None => {return IntersectArcArcResult::None;}
+                                        Some(angle_arc1_p2) => {
+                                            let at_arc2_p2 = check_point_in_arc(arc2, &pos2);
+                                            match at_arc2_p2 {
+                                                None => {return IntersectArcArcResult::None;}
+                                                Some(angle_arc2_p2) => {
+                                                    return IntersectArcArcResult::TwoCirclesOnePoint((pos2, angle_arc1_p2, angle_arc2_p2));
+                                                }
+                                            }
+                                        }
+                                    } 
+                                }
+                                Some(angle1_p1) => {}
+                            }
+                        }
+                        Some(intersect_index) => {
+
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 fn compare_point_line(i: usize,
@@ -705,17 +835,4 @@ enum IntersectSegmentSegmentResult {
     SameParallel,
     SameAntiParallel,
     Point(crate::Pos)
-}
-
-fn check_intersect_arc_arc(arc1: &Arc, arc2: &Arc) {
-    if check_same_point(&arc1.center, &arc2.center) {
-        if arc1.radius - arc2.radius < MIN_DELTA {
-            
-        } else {
-            // return None
-        }
-
-    } else {
-
-    }
 }
