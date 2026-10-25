@@ -289,6 +289,30 @@ impl FigureIntermediate {
     }
 
     fn merge_line_line(&mut self, l1_num: usize, l2_num: usize, result: IntersectLineLineResult) {
+        match result {
+            IntersectLineLineResult::SomeAntiParallel => {
+
+            }
+            IntersectLineLineResult::SomeParralel => {
+
+            }
+            IntersectLineLineResult::ArcSegmentOnePoint((pos, angle)) => {
+
+            }
+            IntersectLineLineResult::ArcSegmentTwoPoints(((pos1, angle1), (pos2, angle2))) => {
+
+            }
+            IntersectLineLineResult::TwoArcsOnePoint((pos1, angle1, angle2)) => {
+
+            }
+            IntersectLineLineResult::TwoArcsTwoPoints(((pos1, angle1_pos1, angle2_pos1),
+                                                       (pos2, angle1_pos2, angle2_pos2))) => {
+
+            }
+            IntersectLineLineResult::TwoSegmentsPoint(pos) => {
+
+            }
+        }
         // TODO
     }
 
