@@ -288,10 +288,40 @@ impl FigureIntermediate {
         }
     }
 
+    fn arrange_points_after_line_removal(&mut self, l_num: usize) {
+        let len_now = self.lines.len();
+        if l_num != (len_now) {
+            for p in self.points.iter_mut() {
+                for lines_vec in [&mut p.lines_starting, &mut p.lines_stopping] {
+                    let last_line_num = lines_vec.iter().position(|x| *x == len_now);
+                    match last_line_num {
+                        None => {}
+                        Some(last_line_n) => {
+                            lines_vec[last_line_n] = l_num;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn merge_line_line(&mut self, l1_num: usize, l2_num: usize, result: IntersectLineLineResult) {
         match result {
             IntersectLineLineResult::SomeAntiParallel => {
-
+                let l1 = self.lines.swap_remove(l1_num);
+                let p1 = &mut self.points[l1.start_point_index];
+                let l1_p1_pos = p1.lines_starting.iter().position(|x| *x ==l1_num).unwrap();
+                p1.lines_starting.swap_remove(l1_p1_pos);
+                let l2_p1_pos = p1.lines_stopping.iter().position(|x| *x ==l2_num).unwrap();
+                p1.lines_starting.swap_remove(l2_p1_pos);
+                let p2 = &mut self.points[l1.stop_point_index];
+                let l1_p2_pos = p2.lines_stopping.iter().position(|x| *x ==l1_num).unwrap();
+                p2.lines_stopping.swap_remove(l1_p2_pos);
+                let l2_p2_pos = p2.lines_starting.iter().position(|x| *x ==l2_num).unwrap();
+                p2.lines_stopping.swap_remove(l2_p2_pos);
+                self.arrange_points_after_line_removal(l1_num);
+                let _ = self.lines.swap_remove(l2_num);
+                self.arrange_points_after_line_removal(l2_num);
             }
             IntersectLineLineResult::SomeParralel => {
 
@@ -364,7 +394,7 @@ impl FigureIntermediate {
             }
         }
         let mut finished_lines_lines = false;
-        let start_i_line = 0;
+        let mut start_i_line = 0;
         while !finished_lines_lines {
             let res = self.compare_lines_lines(start_i_line);
             match res {
@@ -373,7 +403,7 @@ impl FigureIntermediate {
                 }
                 Some((i_l1, i_l2, result)) => {
                     self.merge_line_line(i_l1, i_l2, result);
-                    // TODO !!!
+                    start_i_line = i_l1;
                 }
             }
         }
