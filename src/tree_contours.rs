@@ -288,6 +288,10 @@ impl FigureIntermediate {
         }
     }
 
+    fn merge_line_line(&mut self, l1_num: usize, l2_num: usize, result: IntersectLineLineResult) {
+        // TODO
+    }
+
     fn merge_and_clean(&mut self) {
         let mut finished_points = false;
         let mut start_i = 0;
@@ -332,6 +336,20 @@ impl FigureIntermediate {
                 Some((p_n, c_n)) => {
                     self.merge_points_circle(p_n, c_n);
                     start_i_point = p_n;
+                }
+            }
+        }
+        let mut finished_lines_lines = false;
+        let start_i_line = 0;
+        while !finished_lines_lines {
+            let res = self.compare_lines_lines(start_i_line);
+            match res {
+                None => {
+                    finished_lines_lines = true;
+                }
+                Some((i_l1, i_l2, result)) => {
+                    self.merge_line_line(i_l1, i_l2, result);
+                    // TODO !!!
                 }
             }
         }
@@ -410,35 +428,117 @@ impl FigureIntermediate {
         None
     }
 
-    fn compare_lines_lines(&self, start_i: usize) {
+    fn compare_lines_lines(&self, start_i: usize) -> Option<(usize, usize, IntersectLineLineResult)>{
         for (counter, l1) in self.lines[start_i..self.lines.len() - 1].iter().enumerate() {
             let i = counter + start_i;
             for (counter2, l2) in self.lines[i + 1..].iter().enumerate() {
                 let j = i + 1 + counter2;
-                // TODO
+                let res = self.check_intersect_line_line(l1, l2);
+                match res {
+                    None => {}
+                    Some(result) => {
+                        return Some((i, j, result));
+                    }
+                }
             }
         }
+        None
     }
 
-    fn check_intersect_line_line(&self, line1: &LineForIntermediate, line2: &LineForIntermediate) {
+    fn check_intersect_line_line(&self, line1: &LineForIntermediate, line2: &LineForIntermediate) -> Option<IntersectLineLineResult> {
         match &line1.line {
             Line::Segment(seg1) => {
                 match &line2.line {
                     Line::Segment(seg2) => {
-
+                        let res = check_intersect_seg_seg(seg1,
+                                                                                 line1.start_point_index,
+                                                                                 line1.stop_point_index,
+                                                                                 seg2,
+                                                                                 line2.start_point_index,
+                                                                                 line2.stop_point_index);
+                        match res {
+                            IntersectSegmentSegmentResult::None => {
+                                return None;
+                            }
+                            IntersectSegmentSegmentResult::Point(pos) => {
+                                return Some(IntersectLineLineResult::TwoSegmentsPoint(pos));
+                            }
+                            IntersectSegmentSegmentResult::SameParallel => {
+                                return Some(IntersectLineLineResult::SomeParralel);
+                            }
+                            IntersectSegmentSegmentResult::SameAntiParallel => {
+                                return Some(IntersectLineLineResult::SomeAntiParallel);
+                            }
+                        }
                     }
                     Line::Arc(arc2) => {
-                        
+                        let res = check_intersect_seg_arc(seg1,
+                                                                                     line1.start_point_index,
+                                                                                     line1.stop_point_index,
+                                                                                     arc2,
+                                                                                     line2.start_point_index,
+                                                                                     line2.stop_point_index);
+                        match res {
+                            IntersectSegmentArcResult::None => {
+                                return None;
+                            }
+                            IntersectSegmentArcResult::OnePoint((pos, angle)) => {
+                                return Some(IntersectLineLineResult::ArcSegmentOnePoint((pos, angle)));
+                            }
+                            IntersectSegmentArcResult::TwoPoints(((pos1, angle1), (pos2, angle2))) => {
+                                return Some(IntersectLineLineResult::ArcSegmentTwoPoints(((pos1, angle1), (pos2, angle2))));
+                            }
+                        }
                     }
                 }
             }
             Line::Arc(arc1) => {            
                 match &line2.line {
                     Line::Segment(seg2) => {
-
+                        let res = check_intersect_seg_arc(seg2,
+                                                                                     line2.start_point_index,
+                                                                                     line2.stop_point_index,
+                                                                                     arc1,
+                                                                                     line1.start_point_index,
+                                                                                     line1.stop_point_index);
+                        match res {
+                            IntersectSegmentArcResult::None => {
+                                return None;
+                            }
+                            IntersectSegmentArcResult::OnePoint((pos, angle)) => {
+                                return Some(IntersectLineLineResult::ArcSegmentOnePoint((pos, angle)));
+                            }
+                            IntersectSegmentArcResult::TwoPoints(((pos1, angle1), (pos2, angle2))) => {
+                                return Some(IntersectLineLineResult::ArcSegmentTwoPoints(((pos1, angle1), (pos2, angle2))));
+                            }
+                        }
                     }
                     Line::Arc(arc2) => {
-                        
+                        let res = self.check_intersect_arc_arc(arc1,
+                                                                                      line1.start_point_index,
+                                                                                      line1.stop_point_index,
+                                                                                      arc2,
+                                                                                      line2.start_point_index,
+                                                                                      line2.stop_point_index);
+                        match res {
+                            IntersectArcArcResult::None => {
+                                return None;
+                            }
+                            IntersectArcArcResult::SameCircleParallel => {
+                                return Some(IntersectLineLineResult::SomeParralel);
+                            }
+                            IntersectArcArcResult::SameCircleAntiparallel => {
+                                return Some(IntersectLineLineResult::SomeAntiParallel);
+                            }
+                            IntersectArcArcResult::TwoCirclesOnePoint((pos, angle1, angle2)) => {
+                                return Some(IntersectLineLineResult::TwoArcsOnePoint((pos, angle1, angle2)));
+                            }
+                            IntersectArcArcResult::TwoCirclesTwoPoints(((pos1, angle1_pos1, angle2_pos1),
+                                                                        (pos2, angle1_pos2, angle2_pos2))) => {
+                                return Some(IntersectLineLineResult::TwoArcsTwoPoints(((pos1, angle1_pos1, angle2_pos1),
+                                                                                       (pos2, angle1_pos2, angle2_pos2))));
+                            }
+                        }
                     }
                 }
             }
@@ -479,28 +579,17 @@ impl FigureIntermediate {
                 return IntersectArcArcResult::None;
             }
             let mut one_point_common = None;
-            if arc1p1 == arc2p1 {one_point_common = Some(1)};
-            if arc1p2 == arc2p2 {one_point_common = Some(2)};
-            if arc1p1 == arc2p2 {one_point_common = Some(3)};
-            if arc2p1 == arc1p2 {one_point_common = Some(4)};
+            if arc1p1 == arc2p1 || arc1p1 == arc2p2 {one_point_common = Some(&self.points[arc1p1].pos)};
+            if arc1p2 == arc2p1 || arc1p2 == arc2p2 {one_point_common = Some(&self.points[arc1p2].pos)};
             let res = intersect_circle_circle(&arc1.center, &arc2.center, arc1.radius, arc2.radius);
             match res {
                 CircleIntersectionResult::None => {
                     return IntersectArcArcResult::None;
                 }
                 CircleIntersectionResult::OnePoint(pos) => {
-                    /*let p1 = &self.points[arc1p1].pos;
-                    let p2 = &self.points[arc1p2].pos;
-                    let p3 = &self.points[arc2p1].pos;
-                    let p4 = &self.points[arc2p2].pos;
-                    for p in [p1, p2, p3, p4] {
-                        if check_same_point(&pos, p) {
-                            return IntersectArcArcResult::None;
-                        }
-                    }*/
                     match one_point_common {
-                        None => {return IntersectArcArcResult::None;}
-                        Some(_) => {
+                        Some(_) => {return IntersectArcArcResult::None;}
+                        None => {
                             let at_arc1 = check_point_in_arc(arc1, &pos);
                             match at_arc1 {
                                 None => {return IntersectArcArcResult::None;}
@@ -537,11 +626,70 @@ impl FigureIntermediate {
                                         }
                                     } 
                                 }
-                                Some(angle1_p1) => {}
+                                Some(angle_arc1_p1) => {
+                                    let at_arc2_p1 = check_point_in_arc(arc2, &pos1);
+                                    match at_arc2_p1 {
+                                        None => {
+                                            // one point still possible (p2)
+                                            let at_arc1_p2 = check_point_in_arc(arc1, &pos2);
+                                            match at_arc1_p2 {
+                                                None => {return IntersectArcArcResult::None;}
+                                                Some(angle_arc1_p2) => {
+                                                    let at_arc2_p2 = check_point_in_arc(arc2, &pos2);
+                                                    match at_arc2_p2 {
+                                                        None => {return IntersectArcArcResult::None;}
+                                                        Some(angle_arc2_p2) => {
+                                                            return IntersectArcArcResult::TwoCirclesOnePoint((pos2, angle_arc1_p2, angle_arc2_p2));
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Some(angle_arc2_p1) => {
+                                            // first point guaranteed
+                                            let at_arc1_p2 = check_point_in_arc(arc1, &pos2);
+                                            match at_arc1_p2 {
+                                                None => {
+                                                    return IntersectArcArcResult::TwoCirclesOnePoint((pos1, angle_arc1_p1, angle_arc2_p1));
+                                                }
+                                                Some(angle_arc1_p2) => {
+                                                    let at_arc2_p2 = check_point_in_arc(arc2, &pos2);
+                                                    match at_arc2_p2 {
+                                                        None => {
+                                                            return IntersectArcArcResult::TwoCirclesOnePoint((pos1, angle_arc1_p1, angle_arc2_p1));
+                                                        }
+                                                        Some(angle_arc2_p2) => {
+                                                            return IntersectArcArcResult::TwoCirclesTwoPoints(((pos1, angle_arc1_p1, angle_arc2_p1),
+                                                                                                               (pos2, angle_arc1_p2, angle_arc2_p2)));
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } 
+                                }
                             }
                         }
-                        Some(intersect_index) => {
-
+                        Some(corner_pos) => {
+                            let leftover_pos;
+                            if check_same_point(corner_pos, &pos1) {
+                                leftover_pos = pos2;
+                            } else {
+                                leftover_pos = pos1;
+                            }
+                            let at_arc1_p = check_point_in_arc(arc1, &leftover_pos);
+                            match at_arc1_p {
+                                None => {return IntersectArcArcResult::None;}
+                                Some(angle_arc1_p) => {
+                                    let at_arc2_p = check_point_in_arc(arc2, &leftover_pos);
+                                    match at_arc2_p {
+                                        None => {return IntersectArcArcResult::None;}
+                                        Some(angle_arc2_p) => {
+                                            return IntersectArcArcResult::TwoCirclesOnePoint((leftover_pos, angle_arc1_p, angle_arc2_p));
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -835,4 +983,149 @@ enum IntersectSegmentSegmentResult {
     SameParallel,
     SameAntiParallel,
     Point(crate::Pos)
+}
+
+enum IntersectLineLineResult {
+    SomeParralel,
+    SomeAntiParallel,
+    TwoArcsOnePoint((crate::Pos, f64, f64)),
+    TwoArcsTwoPoints(((crate::Pos, f64, f64), (crate::Pos, f64, f64))),
+    ArcSegmentOnePoint((crate::Pos, f64)),
+    ArcSegmentTwoPoints(((crate::Pos, f64), (crate::Pos, f64))),
+    TwoSegmentsPoint(crate::Pos)
+}
+
+fn check_intersect_seg_seg(seg1: &LineSegment,
+                           seg1_p1: usize,
+                           seg1_p2: usize,
+                           seg2: &LineSegment,
+                           seg2_p1: usize,
+                           seg2_p2: usize) -> IntersectSegmentSegmentResult {
+    if (seg1_p1 == seg2_p1) && (seg1_p2 == seg2_p2) {
+        return IntersectSegmentSegmentResult::SameParallel;
+    }
+    if (seg1_p1 == seg2_p2) && (seg2_p1 == seg1_p2) {
+        return IntersectSegmentSegmentResult::SameAntiParallel;
+    }
+    if (seg1_p1 == seg2_p1) || (seg1_p1 == seg2_p2) || (seg1_p2 == seg2_p1) || (seg1_p2 == seg2_p2) {
+        return IntersectSegmentSegmentResult::None;
+    }
+    let res = intersect_straight(&seg1.point1, &seg1.point2, &seg2.point1, &seg2.point2);
+    match res {
+        IntersectStraightResult::Parallel | IntersectStraightResult::SameLine => {
+            return IntersectSegmentSegmentResult::None;
+        }
+        IntersectStraightResult::Point(pos) => {
+            if check_point_on_segment_line(&pos, &seg1.point1, &seg1.point2) {
+                if check_point_on_segment_line(&pos, &seg2.point1, &seg2.point2) {
+                    return IntersectSegmentSegmentResult::Point(pos)
+                }
+            }
+            return IntersectSegmentSegmentResult::None;
+        }
+    }
+}
+
+fn check_intersect_seg_arc(seg: &LineSegment,
+                           seg_p1: usize,
+                           seg_p2: usize,
+                           arc: &Arc,
+                           arc_p1: usize,
+                           arc_p2: usize) -> IntersectSegmentArcResult {
+    if ((seg_p1 == arc_p1) && (seg_p2 == arc_p2)) || ((seg_p1 == arc_p2) && (seg_p2 == arc_p1)) {
+        return IntersectSegmentArcResult::None;
+    }
+    let mut one_point_common = None;
+    if seg_p1 == arc_p1 || seg_p1 == arc_p2 {one_point_common = Some(&seg.point1)};
+    if seg_p2 == arc_p1 || seg_p2 == arc_p2 {one_point_common = Some(&seg.point2)};
+    let res = intersect_circle_line(&arc.center, arc.radius, &seg.point1, &seg.point2);
+    match res {
+        CircleIntersectionResult::None => {return IntersectSegmentArcResult::None;}
+        CircleIntersectionResult::OnePoint(pos) => {
+            match one_point_common {
+                Some(_) => {return IntersectSegmentArcResult::None;}
+                None => {
+                    if check_point_on_segment_line(&pos, &seg.point1, &seg.point2) {
+                        let point_arc = check_point_in_arc(arc, &pos);
+                        match point_arc {
+                            None => {return IntersectSegmentArcResult::None;}
+                            Some(angle) => {
+                                return IntersectSegmentArcResult::OnePoint((pos, angle));
+                            }
+                        }
+                    }
+                    return IntersectSegmentArcResult::None;
+                }
+            }
+        }
+        CircleIntersectionResult::TwoPoints((pos1, pos2)) => {
+            match one_point_common {
+                None => {
+                    if check_point_on_segment_line(&pos1, &seg.point1, &seg.point2) {
+                        let point1_arc = check_point_in_arc(arc, &pos1);
+                        match point1_arc {
+                            None => {
+                                if check_point_on_segment_line(&pos2, &seg.point1, &seg.point2) {
+                                    let point2_arc = check_point_in_arc(arc, &pos2);
+                                    match point2_arc {
+                                        None => {return IntersectSegmentArcResult::None;}
+                                        Some(angle2) => {
+                                            return IntersectSegmentArcResult::OnePoint((pos2, angle2));
+                                        }
+                                    }
+                                } else {
+                                    return IntersectSegmentArcResult::None;
+                                }
+                            }
+                            Some(angle1) => {
+                                if check_point_on_segment_line(&pos2, &seg.point1, &seg.point2) {
+                                    let point2_arc = check_point_in_arc(arc, &pos2);
+                                    match point2_arc {
+                                        None => {
+                                            return IntersectSegmentArcResult::OnePoint((pos1, angle1));
+                                        }
+                                        Some(angle2) => {
+                                            return IntersectSegmentArcResult::TwoPoints(((pos1, angle1), (pos2, angle2)));
+                                        }
+                                    }
+                                } else {
+                                    return IntersectSegmentArcResult::OnePoint((pos1, angle1));
+                                }
+                            }
+                        }
+                    } else {
+                        if check_point_on_segment_line(&pos2, &seg.point1, &seg.point2) {
+                            let point2_arc = check_point_in_arc(arc, &pos2);
+                            match point2_arc {
+                                None => {return IntersectSegmentArcResult::None;}
+                                Some(angle2) => {
+                                    return IntersectSegmentArcResult::OnePoint((pos2, angle2));
+                                }
+                            }
+                        } else {
+                            return IntersectSegmentArcResult::None;
+                        }
+                    }
+                }
+                Some(corner_pos) => {
+                    let leftover_pos;
+                    if check_same_point(corner_pos, &pos1) {
+                        leftover_pos = pos2;
+                    } else {
+                        leftover_pos = pos1;
+                    }
+                    if check_point_on_segment_line(&leftover_pos, &seg.point1, &seg.point2) {
+                        let point_arc = check_point_in_arc(arc, &leftover_pos);
+                        match point_arc {
+                            None => {return IntersectSegmentArcResult::None;}
+                            Some(angle) => {
+                                return IntersectSegmentArcResult::OnePoint((leftover_pos, angle));
+                            }
+                        }
+                    }
+                    return IntersectSegmentArcResult::None;
+                }
+            }
+        }
+    }
 }
