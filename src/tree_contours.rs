@@ -307,27 +307,69 @@ impl FigureIntermediate {
 
     fn merge_line_line(&mut self, l1_num: usize, l2_num: usize, result: IntersectLineLineResult) {
         match result {
-            IntersectLineLineResult::SomeAntiParallel => {
+            IntersectLineLineResult::SameAntiParallel => {
                 let l1 = self.lines.swap_remove(l1_num);
                 let p1 = &mut self.points[l1.start_point_index];
                 let l1_p1_pos = p1.lines_starting.iter().position(|x| *x ==l1_num).unwrap();
                 p1.lines_starting.swap_remove(l1_p1_pos);
                 let l2_p1_pos = p1.lines_stopping.iter().position(|x| *x ==l2_num).unwrap();
-                p1.lines_starting.swap_remove(l2_p1_pos);
+                p1.lines_stopping.swap_remove(l2_p1_pos);
                 let p2 = &mut self.points[l1.stop_point_index];
                 let l1_p2_pos = p2.lines_stopping.iter().position(|x| *x ==l1_num).unwrap();
                 p2.lines_stopping.swap_remove(l1_p2_pos);
                 let l2_p2_pos = p2.lines_starting.iter().position(|x| *x ==l2_num).unwrap();
-                p2.lines_stopping.swap_remove(l2_p2_pos);
+                p2.lines_starting.swap_remove(l2_p2_pos);
                 self.arrange_points_after_line_removal(l1_num);
                 let _ = self.lines.swap_remove(l2_num);
                 self.arrange_points_after_line_removal(l2_num);
             }
-            IntersectLineLineResult::SomeParralel => {
+            IntersectLineLineResult::SameParallel => {
+                let l2 = self.lines.swap_remove(l2_num);
+                let p1 = &mut self.points[l2.start_point_index];
+                let l2_p1_pos = p1.lines_starting.iter().position(|x| *x ==l2_num).unwrap();
+                p1.lines_starting.swap_remove(l2_p1_pos);
+                let p2 = &mut self.points[l2.stop_point_index];
+                let l2_p2_pos = p2.lines_stopping.iter().position(|x| *x ==l2_num).unwrap();
+                p2.lines_stopping.swap_remove(l2_p2_pos);
+                self.arrange_points_after_line_removal(l2_num);
 
             }
             IntersectLineLineResult::ArcSegmentOnePoint((pos, angle)) => {
-
+                let l1 = self.lines.swap_remove(l1_num);
+                let new_point_ind = self.points.len();
+                let l1_1;
+                let l1_2;
+                match l1.line {
+                    Line::Segment(seg) => {
+                        let seg1 = LineSegment::new(seg.point1, pos.clone());
+                        l1_1 = LineForIntermediate {
+                            start_point_index: l1.start_point_index,
+                            stop_point_index: new_point_ind,
+                            line: Line::Segment(seg1)
+                        };
+                        let seg2 = LineSegment::new(pos.clone(), seg.point2);
+                        l1_2 = LineForIntermediate {
+                            start_point_index: new_point_ind,
+                            stop_point_index: l1.stop_point_index,
+                            line: Line::Segment(seg2)
+                        };
+                    }
+                    Line::Arc(arc) => {
+                        let arc1 = Arc::new(arc.center.clone(), arc.radius, arc.angle_start, angle);
+                        l1_1 = LineForIntermediate {
+                            start_point_index: l1.start_point_index,
+                            stop_point_index: new_point_ind,
+                            line: Line::Arc(arc1)
+                        };
+                        let arc2 = Arc::new(arc.center.clone(), arc.radius, angle, arc.angle_stop);
+                        l1_2 = LineForIntermediate {
+                            start_point_index: new_point_ind,
+                            stop_point_index: l1.stop_point_index,
+                            line: Line::Arc(arc2)
+                        };
+                    }
+                }
+                let 
             }
             IntersectLineLineResult::ArcSegmentTwoPoints(((pos1, angle1), (pos2, angle2))) => {
 
@@ -518,10 +560,10 @@ impl FigureIntermediate {
                                 return Some(IntersectLineLineResult::TwoSegmentsPoint(pos));
                             }
                             IntersectSegmentSegmentResult::SameParallel => {
-                                return Some(IntersectLineLineResult::SomeParralel);
+                                return Some(IntersectLineLineResult::SameParallel);
                             }
                             IntersectSegmentSegmentResult::SameAntiParallel => {
-                                return Some(IntersectLineLineResult::SomeAntiParallel);
+                                return Some(IntersectLineLineResult::SameAntiParallel);
                             }
                         }
                     }
@@ -579,10 +621,10 @@ impl FigureIntermediate {
                                 return None;
                             }
                             IntersectArcArcResult::SameCircleParallel => {
-                                return Some(IntersectLineLineResult::SomeParralel);
+                                return Some(IntersectLineLineResult::SameParallel);
                             }
                             IntersectArcArcResult::SameCircleAntiparallel => {
-                                return Some(IntersectLineLineResult::SomeAntiParallel);
+                                return Some(IntersectLineLineResult::SameAntiParallel);
                             }
                             IntersectArcArcResult::TwoCirclesOnePoint((pos, angle1, angle2)) => {
                                 return Some(IntersectLineLineResult::TwoArcsOnePoint((pos, angle1, angle2)));
@@ -1040,8 +1082,8 @@ enum IntersectSegmentSegmentResult {
 }
 
 enum IntersectLineLineResult {
-    SomeParralel,
-    SomeAntiParallel,
+    SameParallel,
+    SameAntiParallel,
     TwoArcsOnePoint((crate::Pos, f64, f64)),
     TwoArcsTwoPoints(((crate::Pos, f64, f64), (crate::Pos, f64, f64))),
     ArcSegmentOnePoint((crate::Pos, f64)),
