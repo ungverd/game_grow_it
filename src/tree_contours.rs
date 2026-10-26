@@ -336,6 +336,8 @@ impl FigureIntermediate {
             }
             IntersectLineLineResult::ArcSegmentOnePoint((pos, angle)) => {
                 let l1 = self.lines.swap_remove(l1_num);
+                let l1_start_point_ind = l1.start_point_index;
+                let l1_stop_point_ind = l1.stop_point_index;
                 let new_point_ind = self.points.len();
                 let l1_1;
                 let l1_2;
@@ -343,33 +345,50 @@ impl FigureIntermediate {
                     Line::Segment(seg) => {
                         let seg1 = LineSegment::new(seg.point1, pos.clone());
                         l1_1 = LineForIntermediate {
-                            start_point_index: l1.start_point_index,
+                            start_point_index: l1_start_point_ind,
                             stop_point_index: new_point_ind,
                             line: Line::Segment(seg1)
                         };
                         let seg2 = LineSegment::new(pos.clone(), seg.point2);
                         l1_2 = LineForIntermediate {
                             start_point_index: new_point_ind,
-                            stop_point_index: l1.stop_point_index,
+                            stop_point_index: l1_stop_point_ind,
                             line: Line::Segment(seg2)
                         };
                     }
                     Line::Arc(arc) => {
                         let arc1 = Arc::new(arc.center.clone(), arc.radius, arc.angle_start, angle);
                         l1_1 = LineForIntermediate {
-                            start_point_index: l1.start_point_index,
+                            start_point_index: l1_start_point_ind,
                             stop_point_index: new_point_ind,
                             line: Line::Arc(arc1)
                         };
                         let arc2 = Arc::new(arc.center.clone(), arc.radius, angle, arc.angle_stop);
                         l1_2 = LineForIntermediate {
                             start_point_index: new_point_ind,
-                            stop_point_index: l1.stop_point_index,
+                            stop_point_index: l1_stop_point_ind,
                             line: Line::Arc(arc2)
                         };
                     }
                 }
-                let 
+                let p1 = &mut self.points[l1_start_point_ind];
+                let l1_p1_pos = p1.lines_starting.iter().position(|x| *x ==l1_num).unwrap();
+                p1.lines_starting.swap_remove(l1_p1_pos);
+                let p2 = &mut self.points[l1_stop_point_ind];
+                let l1_p2_pos = p2.lines_stopping.iter().position(|x| *x ==l1_num).unwrap();
+                p2.lines_stopping.swap_remove(l1_p2_pos);
+                self.arrange_points_after_line_removal(l1_num);
+                let lines_len_before = self.lines.len();
+                let l1_1_ind = lines_len_before;
+                let l1_2_ind = lines_len_before + 1;
+                self.lines.push(l1_1);
+                self.lines.push(l1_2);
+                let p1 = &mut self.points[l1_start_point_ind];
+                p1.lines_starting.push(l1_1_ind);
+                let p2 = &mut self.points[l1_stop_point_ind];
+                p2.lines_stopping.push(l1_2_ind);
+                // TODO: second line, add center point
+
             }
             IntersectLineLineResult::ArcSegmentTwoPoints(((pos1, angle1), (pos2, angle2))) => {
 
