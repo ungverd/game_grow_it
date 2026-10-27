@@ -183,112 +183,108 @@ impl FigureIntermediate {
         fp_obj.lines_stopping.append(&mut sp_obj.lines_stopping);
     }
 
-    fn clean_points_after_merge_point_line(&mut self, line_n:usize, len_before: usize, p_n: usize) {
-        let line1_num = len_before - 1;
-        let line2_num = len_before;
-        let special_value = usize::MAX;
-        for (point_number, point) in &mut self.points.iter_mut().enumerate() {
-            if len_before - 1 != line_n {
-                for lst in [&mut point.lines_starting, &mut point.lines_stopping] {
-                    let prev_last_pos = lst.iter().position(|x| *x == len_before - 1);
-                    match prev_last_pos {
-                        None => {}
-                        Some(pr_last_pos) => {
-                            lst[pr_last_pos] = special_value;
-                        }
-                    }
-                }
-            }
-            if point_number == p_n {
-                point.lines_starting.push(line2_num);
-                point.lines_stopping.push(line1_num);
-            } else {
-                let arc_pos = point.lines_starting.iter().position(|x| *x == line_n);
-                match arc_pos {
-                    None => {}
-                    Some(a_pos) => {
-                        point.lines_starting[a_pos] = line1_num;
-                    }
-                }
-                let arc_pos = point.lines_stopping.iter().position(|x| *x ==line_n);
-                match arc_pos {
-                    None => {}
-                    Some(a_pos) => {
-                        point.lines_starting[a_pos] = line2_num;
-                    }
-                }
-            }
-            if len_before - 1 != line_n {
-                for lst in [&mut point.lines_starting, &mut point.lines_stopping] {
-                    let spec_pos = lst.iter().position(|x| *x == special_value);
-                    match spec_pos {
-                        None => {}
-                        Some(sp_pos) => {
-                            lst[sp_pos] = line_n;
-                        }
-                    }
-                }
-            }
+    fn clean_points_after_merge_point_line(&mut self,
+                                           pn_start: usize,
+                                           pn_stop: usize,
+                                           pn_center: usize,
+                                           n_line: usize) {
+            let n_line1 = self.lines.len() - 2;
+            let n_line2 = self.lines.len() - 1;
+            let p_start = &mut self.points[pn_start];
+            let pos_to_swap = p_start.lines_starting.iter().position(|x| *x == n_line).unwrap();
+            p_start.lines_starting[pos_to_swap] = n_line1;
+            let p_stop = &mut self.points[pn_stop];
+            let pos_to_swap = p_stop.lines_stopping.iter().position(|x| *x == n_line).unwrap();
+            p_stop.lines_stopping[pos_to_swap] = n_line2;
+            let p_center = &mut self.points[pn_center];
+            p_center.lines_starting.push(n_line2);
+            p_center.lines_stopping.push(n_line1);
         }
-    }
 
     fn arrange_two_lines_from_one(&mut self,
                                   old_line: LineForIntermediate,
                                   line_n:usize,
                                   line1: Line,
                                   line2: Line,
-                                  len_before: usize,
                                   p_n: usize) {
+        let start_point_index = old_line.start_point_index;
+        let stop_point_index = old_line.stop_point_index;
         let for_interm1 = LineForIntermediate{
-            start_point_index: old_line.start_point_index,
+            start_point_index,
             stop_point_index: p_n,
             line: line1
         };
         let for_interm2 = LineForIntermediate{
             start_point_index: p_n,
-            stop_point_index: old_line.stop_point_index,
+            stop_point_index,
             line: line2
         };
         self.lines.push(for_interm1);
         self.lines.push(for_interm2);
-        self.clean_points_after_merge_point_line(line_n, len_before, p_n);
+        self.clean_points_after_merge_point_line(start_point_index, stop_point_index, p_n, line_n);
+    }
+
+    fn remove_line_num_that_was_swapped(&mut self, line_n: usize) {
+        let prev_position = self.lines.len();
+        if line_n != prev_position {
+            let line_now = &self.lines[line_n];
+            let p1 = &mut self.points[line_now.start_point_index];
+            let line_pos = p1.lines_starting.iter().position(|x| *x == prev_position).unwrap();
+            p1.lines_starting.swap_remove(line_pos);
+            let p2 = &mut self.points[line_now.stop_point_index];
+            let line_pos = p2.lines_stopping.iter().position(|x| *x == prev_position).unwrap();
+            p2.lines_stopping.swap_remove(line_pos);
+        }
+    }
+
+    fn add_line_num_that_was_swapped(&mut self, line_n: usize) {
+        if line_n != self.lines.len() - 2 {
+            let line_now = &self.lines[line_n];
+            let p1 = &mut self.points[line_now.start_point_index];
+            p1.lines_starting.push(line_n);
+            let p2 = &mut self.points[line_now.stop_point_index];
+            p2.lines_stopping.push(line_n);
+        }
     }
 
     fn merge_point_line(&mut self, res: ComparePointsLinesResult) {
-        let len_before = self.lines.len();
         match res {
             ComparePointsLinesResult::None => {}
             ComparePointsLinesResult::PointArc((p_n, arc_n, angle)) => {
                 let arc = self.lines.swap_remove(arc_n);
+                self.remove_line_num_that_was_swapped(arc_n);
                 match &arc.line {
-                    Line::Segment(_seg) => {}
+                    Line::Segment(_seg) => {} // error if we are here
                     Line::Arc(inner_arc) => {
                         let new_arc_1 = Arc::new(inner_arc.center.clone(), inner_arc.radius, inner_arc.angle_start, angle);
                         let new_arc_2 = Arc::new(inner_arc.center.clone(), inner_arc.radius, angle, inner_arc.angle_stop);
                         let line1 = Line::Arc(new_arc_1);
                         let line2 = Line::Arc(new_arc_2);
-                        self.arrange_two_lines_from_one(arc, arc_n, line1, line2, len_before, p_n);
+                        self.arrange_two_lines_from_one(arc, arc_n, line1, line2, p_n);
+                        self.add_line_num_that_was_swapped(arc_n);
                     }
                 }            
             }
             ComparePointsLinesResult::PointSegment((p_n, seg_n)) => {
                 let seg = self.lines.swap_remove(seg_n);
+                self.remove_line_num_that_was_swapped(seg_n);
                 match &seg.line {
-                    Line::Arc(_arc) => {}
+                    Line::Arc(_arc) => {} // error if we are here
                     Line::Segment(inner_seg) => {
                         let new_pos = self.points[p_n].pos.clone();
                         let new_line1 = LineSegment::new(inner_seg.point1.clone(), new_pos.clone());
                         let new_line2 = LineSegment::new(new_pos, inner_seg.point2.clone());
                         let line1 = Line::Segment(new_line1);
                         let line2 = Line::Segment(new_line2);
-                        self.arrange_two_lines_from_one(seg, seg_n, line1, line2, len_before, p_n);
+                        self.arrange_two_lines_from_one(seg, seg_n, line1, line2, p_n);
+                        self.add_line_num_that_was_swapped(seg_n);
                     }
                 }
             }
         }
     }
 
-    fn arrange_points_after_line_removal(&mut self, l_num: usize) {
+    fn arrange_points_after_line_removal(&mut self, l_num: usize) { // TODO refactor!
         let len_now = self.lines.len();
         if l_num != (len_now) {
             for p in self.points.iter_mut() {
