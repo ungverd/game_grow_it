@@ -251,7 +251,6 @@ impl FigureIntermediate {
 
     fn merge_point_line(&mut self, res: ComparePointsLinesResult) {
         match res {
-            ComparePointsLinesResult::None => {}
             ComparePointsLinesResult::PointArc((p_n, arc_n, angle)) => {
                 let arc = self.lines.swap_remove(arc_n);
                 self.remove_line_num_that_was_swapped(arc_n);
@@ -310,6 +309,22 @@ impl FigureIntermediate {
         }
     }
 
+    fn line_line(&mut self,
+                 pos: &crate::Pos,
+                 recipe1: ComparePointsLinesResult,
+                 recipe2: ComparePointsLinesResult,
+                 point_num: usize) {
+        let point = PointForIntermediate {
+            pos: pos.clone(),
+            lines_starting: vec![],
+            lines_stopping: vec![]
+        };
+        self.points.push(point);
+        self.merge_point_line(recipe1);
+        self.merge_point_line(recipe2);
+        self.adjust_new_point(point_num);
+    }
+
     fn merge_line_line(&mut self, l1_num: usize, l2_num: usize, result: IntersectLineLineResult) {
         match result {
             IntersectLineLineResult::SameAntiParallel => {
@@ -320,13 +335,7 @@ impl FigureIntermediate {
                 self.remove_line(l2_num);
             }
             IntersectLineLineResult::ArcSegmentOnePoint((pos, angle)) => {
-                let point = PointForIntermediate {
-                    pos: pos.clone(),
-                    lines_starting: vec![],
-                    lines_stopping: vec![]
-                };
-                self.points.push(point);
-                let point_num = self.points.len() - 1;
+                let point_num = self.points.len();
                 let recipe1;
                 let recipe2;
                 match &self.lines[l1_num].line {
@@ -339,25 +348,47 @@ impl FigureIntermediate {
                         recipe2 = ComparePointsLinesResult::PointArc((point_num, l2_num, angle));
                     }
                 }
-                self.merge_point_line(recipe1);
-                self.merge_point_line(recipe2);
-                // TODO intersect this new point with all lines
+                self.line_line(&pos, recipe1, recipe2, point_num);
             }
             IntersectLineLineResult::ArcSegmentTwoPoints(((pos1, angle1), (pos2, angle2))) => {
-
+                let point_num = self.points.len();
+                let recipe1;
+                let recipe2;
+                match &self.lines[l1_num].line {
+                    &Line::Arc(_) => {
+                        recipe1 = ComparePointsLinesResult::PointArc((point_num, l1_num, angle1));
+                        recipe2 = ComparePointsLinesResult::PointSegment((point_num, l2_num));
+                    }
+                    &Line::Segment(_) => {
+                        recipe1 = ComparePointsLinesResult::PointSegment((point_num, l1_num));
+                        recipe2 = ComparePointsLinesResult::PointArc((point_num, l2_num, angle1));
+                    }
+                }
+                self.line_line(&pos1, recipe1, recipe2, point_num);
+                // TODO
             }
-            IntersectLineLineResult::TwoArcsOnePoint((pos1, angle1, angle2)) => {
-
+            IntersectLineLineResult::TwoArcsOnePoint((pos, angle1, angle2)) => {
+                let point_num = self.points.len();
+                let recipe1 = ComparePointsLinesResult::PointArc((point_num, l1_num, angle1));
+                let recipe2 = ComparePointsLinesResult::PointArc((point_num, l2_num, angle2));
+                self.line_line(&pos, recipe1, recipe2, point_num);
             }
             IntersectLineLineResult::TwoArcsTwoPoints(((pos1, angle1_pos1, angle2_pos1),
                                                        (pos2, angle1_pos2, angle2_pos2))) => {
+                let point_num = self.points.len();
+                let recipe1 = ComparePointsLinesResult::PointArc((point_num, l1_num, angle1_pos1));
+                let recipe2 = ComparePointsLinesResult::PointArc((point_num, l2_num, angle2_pos1));
+                self.line_line(&pos1, recipe1, recipe2, point_num);
+                //TODO
 
             }
             IntersectLineLineResult::TwoSegmentsPoint(pos) => {
-
+                let point_num = self.points.len();
+                let recipe1 = ComparePointsLinesResult::PointSegment((point_num, l1_num));
+                let recipe2 = ComparePointsLinesResult::PointSegment((point_num, l2_num));
+                self.line_line(&pos, recipe1, recipe2, point_num);
             }
         }
-        // TODO
     }
 
     fn merge_and_clean(&mut self) {
@@ -380,16 +411,21 @@ impl FigureIntermediate {
         while !finished_points_lines {
             let res = self.compare_points_lines(start_i_point, 0);
             match res {
-                ComparePointsLinesResult::None => {
+                None => {
                     finished_points_lines = true;
                 }
-                ComparePointsLinesResult::PointArc((p_n, _, __)) => {
-                    self.merge_point_line(res);
-                    start_i_point = p_n;
-                }
-                ComparePointsLinesResult::PointSegment((p_n, _)) => {
-                    self.merge_point_line(res);
-                    start_i_point = p_n;
+                Some(result) => {
+                    match result {
+                        ComparePointsLinesResult::PointArc((p_n, _, __)) => {
+                            self.merge_point_line(result);
+                            start_i_point = p_n;
+                        }
+                        ComparePointsLinesResult::PointSegment((p_n, _)) => {
+                            self.merge_point_line(result);
+                            start_i_point = p_n;
+                        }
+
+                    }
                 }
             }
         }
@@ -438,18 +474,23 @@ impl FigureIntermediate {
         };
         self.lines.push(new_interm);
         let mut finished_points_lines = false;
-        let mut start_i_point = 0;
+        let mut start_i_point = p_n + 1;
         while !finished_points_lines {
-            let res = self.compare_points_lines(start_i_point, len_lines_before);
+            let res = self.compare_points_lines(start_i_point,
+                                                                    len_lines_before);
             match res {
-                ComparePointsLinesResult::None => {
+                None => {
                     finished_points_lines = true;
                 }
-                ComparePointsLinesResult::PointArc((p_n, _, _)) => {
-                    self.merge_point_line(res);
-                    start_i_point = p_n;
+                Some(result) => {
+                    match result {
+                        ComparePointsLinesResult::PointArc((p_num, _, _)) => {
+                            self.merge_point_line(result);
+                            start_i_point = p_num;
+                        }
+                        ComparePointsLinesResult::PointSegment(_) => {}// If we are here it's an error!
+                    }
                 }
-                ComparePointsLinesResult::PointSegment(_) => {}// If we are here it's an error!
             }
         }
     }
@@ -466,21 +507,85 @@ impl FigureIntermediate {
         None
     }
 
-    fn compare_points_lines(&self, start_i_point: usize, start_i_line: usize) -> ComparePointsLinesResult {
+    fn compare_points_lines(&self, start_i_point: usize, start_i_line: usize) -> Option<ComparePointsLinesResult> {
         for (counter, p) in self.points[start_i_point..].iter().enumerate() {
             let i = counter + start_i_point;
             for (counter2, line) in self.lines[start_i_line..].iter().enumerate() {
                 let j = counter2 + start_i_line;
                 let res = compare_point_line(i, j, p, line);
                 match res {
-                    ComparePointsLinesResult::PointArc(_) | ComparePointsLinesResult::PointSegment(_) => {
+                    Some(_) => {
                         return res;
                     }
-                    ComparePointsLinesResult::None => {}
+                    None => {}
                 }
             }
         }
-        ComparePointsLinesResult::None
+        None
+    }
+
+    fn adjust_new_point(&mut self, point_num: usize) {
+        let mut done = false;
+        let mut line_num_start = 0;
+        while !done {
+            let res = self.compare_new_point_lines(point_num, line_num_start);
+            match res {
+                Some(result) => {
+                    match result {
+                        ComparePointsLinesResult::PointArc((_, ln, _)) => {
+                            line_num_start = ln;
+                        }
+                        ComparePointsLinesResult::PointSegment((_, ln)) => {
+                            line_num_start = ln;
+                        }
+                    }
+                    self.merge_point_line(result);
+                }
+                None => {
+                    done = true;
+                }
+            }
+        }
+        done = false;
+        let mut circles_num_start = 0;
+        while !done {
+            let res = self.compare_new_point_circles(point_num, circles_num_start);
+            match res {
+                None => {
+                    done = true;
+                }
+                Some(c_n) => {
+                    self.merge_points_circle(point_num, c_n);
+                    circles_num_start = c_n;
+                }
+            }
+        }
+    }
+
+    fn compare_new_point_lines(&self, point_num: usize, line_num_start: usize) -> Option<ComparePointsLinesResult> {
+        let p = &self.points[point_num];
+        for (counter, line) in self.lines[line_num_start..].iter().enumerate() {
+            let j_line = counter + line_num_start;
+            let res = compare_point_line(point_num, j_line, p, line);
+            match res {
+                Some(_) => {
+                    return res;
+                }
+                None => {}
+            }
+        }
+        None
+    }
+
+    fn compare_new_point_circles(&self, point_num: usize, circles_num_start: usize) -> Option<usize> {
+        let p = &self.points[point_num];
+        for (circle_counter, circle) in self.circles[circles_num_start..].iter().enumerate() {
+            let circle_num = circle_counter + circles_num_start;
+            if point_on_circle(&p.pos, &circle.center, circle.radius) {
+                return Some(circle_num);
+            }    
+        }
+        None
     }
     
     fn compare_points(&self, start_i: usize) -> Option<(usize, usize)> {
@@ -767,16 +872,16 @@ impl FigureIntermediate {
 
 }
 
-fn compare_point_line(i: usize,
-                      j: usize,
+fn compare_point_line(i_point: usize,
+                      j_line: usize,
                       p: &PointForIntermediate,
-                      line: &LineForIntermediate) -> ComparePointsLinesResult {
-        if i != line.start_point_index && i != line.stop_point_index {
+                      line: &LineForIntermediate) -> Option<ComparePointsLinesResult> {
+        if i_point != line.start_point_index && i_point != line.stop_point_index {
             match &line.line {
                 Line::Segment(seg) => {
                     if point_on_line(&seg.point1, &seg.point2, &p.pos) {
                         if check_point_on_segment_line(&p.pos, &seg.point1, &seg.point2) {
-                            return ComparePointsLinesResult::PointSegment((i, j));
+                            return Some(ComparePointsLinesResult::PointSegment((i_point, j_line)));
                         }
                     }
                 }
@@ -785,7 +890,7 @@ fn compare_point_line(i: usize,
                         let res = check_point_in_arc(&arc, &p.pos);
                         match res {
                             Some(angle) => {
-                                return ComparePointsLinesResult::PointArc((i, j, angle));
+                                return Some(ComparePointsLinesResult::PointArc((i_point, j_line, angle)));
                             }
                             None => {}
                         }
@@ -793,11 +898,10 @@ fn compare_point_line(i: usize,
                 }
             }
         }
-        ComparePointsLinesResult::None
+        None
     }
 
 enum ComparePointsLinesResult {
-    None,
     PointSegment((usize, usize)),
     PointArc((usize, usize, f64)) // point, arc, angle
 }
