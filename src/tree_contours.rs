@@ -284,107 +284,62 @@ impl FigureIntermediate {
         }
     }
 
-    fn arrange_points_after_line_removal(&mut self, l_num: usize) { // TODO refactor!
-        let len_now = self.lines.len();
-        if l_num != (len_now) {
-            for p in self.points.iter_mut() {
-                for lines_vec in [&mut p.lines_starting, &mut p.lines_stopping] {
-                    let last_line_num = lines_vec.iter().position(|x| *x == len_now);
-                    match last_line_num {
-                        None => {}
-                        Some(last_line_n) => {
-                            lines_vec[last_line_n] = l_num;
-                        }
-                    }
-                }
-            }
+    fn remove_line(&mut self, l_num: usize) {
+        let l = self.lines.swap_remove(l_num);
+        let pn1 = l.start_point_index;
+        let pn2 = l.stop_point_index;
+        let p1l = &mut self.points[pn1].lines_starting;
+        let p1_ind = p1l.iter().position(|x| *x == l_num).unwrap();
+        p1l.swap_remove(p1_ind);
+        let p2l = &mut self.points[pn2].lines_stopping;
+        let p2_ind = p2l.iter().position(|x| *x == l_num).unwrap();
+        p2l.swap_remove(p2_ind);
+        let now_len = self.lines.len();
+        if l_num != now_len {
+            let swapped_l = &self.lines[l_num];
+            let pn_start = swapped_l.start_point_index;
+            let pn_stop = swapped_l.stop_point_index;
+            let p_start = &mut self.points[pn_start];
+            let l_pos = p_start.lines_starting.iter().position(|x| *x == now_len).unwrap();
+            p_start.lines_starting[l_pos] = l_num;
+            let p_stop = &mut self.points[pn_stop];
+            let l_pos = p_stop.lines_stopping.iter().position(|x| *x == now_len).unwrap();
+            p_stop.lines_stopping[l_pos] = l_num;
         }
     }
 
     fn merge_line_line(&mut self, l1_num: usize, l2_num: usize, result: IntersectLineLineResult) {
         match result {
             IntersectLineLineResult::SameAntiParallel => {
-                let l1 = self.lines.swap_remove(l1_num);
-                let p1 = &mut self.points[l1.start_point_index];
-                let l1_p1_pos = p1.lines_starting.iter().position(|x| *x ==l1_num).unwrap();
-                p1.lines_starting.swap_remove(l1_p1_pos);
-                let l2_p1_pos = p1.lines_stopping.iter().position(|x| *x ==l2_num).unwrap();
-                p1.lines_stopping.swap_remove(l2_p1_pos);
-                let p2 = &mut self.points[l1.stop_point_index];
-                let l1_p2_pos = p2.lines_stopping.iter().position(|x| *x ==l1_num).unwrap();
-                p2.lines_stopping.swap_remove(l1_p2_pos);
-                let l2_p2_pos = p2.lines_starting.iter().position(|x| *x ==l2_num).unwrap();
-                p2.lines_starting.swap_remove(l2_p2_pos);
-                self.arrange_points_after_line_removal(l1_num);
-                let _ = self.lines.swap_remove(l2_num);
-                self.arrange_points_after_line_removal(l2_num);
+                self.remove_line(l1_num);
+                self.remove_line(l2_num);
             }
             IntersectLineLineResult::SameParallel => {
-                let l2 = self.lines.swap_remove(l2_num);
-                let p1 = &mut self.points[l2.start_point_index];
-                let l2_p1_pos = p1.lines_starting.iter().position(|x| *x ==l2_num).unwrap();
-                p1.lines_starting.swap_remove(l2_p1_pos);
-                let p2 = &mut self.points[l2.stop_point_index];
-                let l2_p2_pos = p2.lines_stopping.iter().position(|x| *x ==l2_num).unwrap();
-                p2.lines_stopping.swap_remove(l2_p2_pos);
-                self.arrange_points_after_line_removal(l2_num);
-
+                self.remove_line(l2_num);
             }
             IntersectLineLineResult::ArcSegmentOnePoint((pos, angle)) => {
-                let l1 = self.lines.swap_remove(l1_num);
-                let l1_start_point_ind = l1.start_point_index;
-                let l1_stop_point_ind = l1.stop_point_index;
-                let new_point_ind = self.points.len();
-                let l1_1;
-                let l1_2;
-                match l1.line {
-                    Line::Segment(seg) => {
-                        let seg1 = LineSegment::new(seg.point1, pos.clone());
-                        l1_1 = LineForIntermediate {
-                            start_point_index: l1_start_point_ind,
-                            stop_point_index: new_point_ind,
-                            line: Line::Segment(seg1)
-                        };
-                        let seg2 = LineSegment::new(pos.clone(), seg.point2);
-                        l1_2 = LineForIntermediate {
-                            start_point_index: new_point_ind,
-                            stop_point_index: l1_stop_point_ind,
-                            line: Line::Segment(seg2)
-                        };
+                let point = PointForIntermediate {
+                    pos: pos.clone(),
+                    lines_starting: vec![],
+                    lines_stopping: vec![]
+                };
+                self.points.push(point);
+                let point_num = self.points.len() - 1;
+                let recipe1;
+                let recipe2;
+                match &self.lines[l1_num].line {
+                    &Line::Arc(_) => {
+                        recipe1 = ComparePointsLinesResult::PointArc((point_num, l1_num, angle));
+                        recipe2 = ComparePointsLinesResult::PointSegment((point_num, l2_num));
                     }
-                    Line::Arc(arc) => {
-                        let arc1 = Arc::new(arc.center.clone(), arc.radius, arc.angle_start, angle);
-                        l1_1 = LineForIntermediate {
-                            start_point_index: l1_start_point_ind,
-                            stop_point_index: new_point_ind,
-                            line: Line::Arc(arc1)
-                        };
-                        let arc2 = Arc::new(arc.center.clone(), arc.radius, angle, arc.angle_stop);
-                        l1_2 = LineForIntermediate {
-                            start_point_index: new_point_ind,
-                            stop_point_index: l1_stop_point_ind,
-                            line: Line::Arc(arc2)
-                        };
+                    &Line::Segment(_) => {
+                        recipe1 = ComparePointsLinesResult::PointSegment((point_num, l1_num));
+                        recipe2 = ComparePointsLinesResult::PointArc((point_num, l2_num, angle));
                     }
                 }
-                let p1 = &mut self.points[l1_start_point_ind];
-                let l1_p1_pos = p1.lines_starting.iter().position(|x| *x ==l1_num).unwrap();
-                p1.lines_starting.swap_remove(l1_p1_pos);
-                let p2 = &mut self.points[l1_stop_point_ind];
-                let l1_p2_pos = p2.lines_stopping.iter().position(|x| *x ==l1_num).unwrap();
-                p2.lines_stopping.swap_remove(l1_p2_pos);
-                self.arrange_points_after_line_removal(l1_num);
-                let lines_len_before = self.lines.len();
-                let l1_1_ind = lines_len_before;
-                let l1_2_ind = lines_len_before + 1;
-                self.lines.push(l1_1);
-                self.lines.push(l1_2);
-                let p1 = &mut self.points[l1_start_point_ind];
-                p1.lines_starting.push(l1_1_ind);
-                let p2 = &mut self.points[l1_stop_point_ind];
-                p2.lines_stopping.push(l1_2_ind);
-                // TODO: second line, add center point
-
+                self.merge_point_line(recipe1);
+                self.merge_point_line(recipe2);
+                // TODO intersect this new point with all lines
             }
             IntersectLineLineResult::ArcSegmentTwoPoints(((pos1, angle1), (pos2, angle2))) => {
 
