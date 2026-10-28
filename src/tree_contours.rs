@@ -156,27 +156,29 @@ impl FigureIntermediate {
         let (first_point, second_point) = if p1 < p2 {(p1, p2)} else {(p2, p1)};
         // second point will disappear
         let points = &mut self.points;
-        let last_ind = points.len() - 1;
-        let lines = &mut self.lines;
         
         let mut sp_obj = points.swap_remove(second_point);
-        // Adjusting point "pointers" in lines
-        for line in lines {
-            if line.start_point_index == second_point {
-                line.start_point_index = first_point;
-            } else {
-                if line.start_point_index == last_ind {
-                    line.start_point_index = second_point;
-                }
+        let prev_ind = points.len();
+        if prev_ind != second_point {
+            let point_swapped = &points[second_point];
+            for l_n in &point_swapped.lines_starting {
+                let line_starting = &mut self.lines[*l_n];
+                line_starting.start_point_index = second_point;
             }
-            if line.stop_point_index == second_point {
-                line.stop_point_index = first_point;
-            } else {
-                if line.stop_point_index == last_ind {
-                    line.stop_point_index = second_point;
-                }
+            for l_n in &point_swapped.lines_stopping {
+                let line_stopping = &mut self.lines[*l_n];
+                line_stopping.stop_point_index = second_point;
             }
         }
+        for l_n in &sp_obj.lines_starting {
+            let line_starting = &mut self.lines[*l_n];
+            line_starting.start_point_index = first_point;
+        }
+        for l_n in &sp_obj.lines_stopping {
+            let line_stopping = &mut self.lines[*l_n];
+            line_stopping.stop_point_index = first_point;
+        }
+        
         let fp_obj = &mut points[first_point];
         // Adjusting line "pointers" in points
         fp_obj.lines_starting.append(&mut sp_obj.lines_starting);
