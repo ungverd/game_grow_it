@@ -325,6 +325,18 @@ impl FigureIntermediate {
         self.adjust_new_point(point_num);
     }
 
+    fn get_angle_start(&self, arc_num: usize) -> f64 {
+        let arc1_l = &self.lines[arc_num].line;
+        match arc1_l {
+            Line::Arc(a) => {
+                return a.angle_start;
+            }
+            Line::Segment(_) => {
+                unreachable!()
+            }
+        }
+    }
+
     fn merge_line_line(&mut self, l1_num: usize, l2_num: usize, result: IntersectLineLineResult) {
         match result {
             IntersectLineLineResult::SameAntiParallel => {
@@ -354,18 +366,63 @@ impl FigureIntermediate {
                 let point_num = self.points.len();
                 let recipe1;
                 let recipe2;
+                let is_first_arc;
                 match &self.lines[l1_num].line {
                     &Line::Arc(_) => {
                         recipe1 = ComparePointsLinesResult::PointArc((point_num, l1_num, angle1));
                         recipe2 = ComparePointsLinesResult::PointSegment((point_num, l2_num));
+                        is_first_arc = true;
                     }
                     &Line::Segment(_) => {
                         recipe1 = ComparePointsLinesResult::PointSegment((point_num, l1_num));
                         recipe2 = ComparePointsLinesResult::PointArc((point_num, l2_num, angle1));
+                        is_first_arc = false;
                     }
                 }
+                let angle_start;
+                let pos_start;
+                if is_first_arc {
+                    angle_start= self.get_angle_start(l1_num);
+                    pos_start = self.points[self.lines[l2_num].start_point_index].pos.clone();
+                } else {
+                    angle_start= self.get_angle_start(l2_num);
+                    pos_start = self.points[self.lines[l1_num].start_point_index].pos.clone();
+                }
                 self.line_line(&pos1, recipe1, recipe2, point_num);
-                // TODO
+                let point_num = self.points.len();
+                let now_lines = self.lines.len();
+                let l1_num;
+                let l2_num;
+                let recipe1;
+                let recipe2;
+                if is_first_arc {
+                    if is_first_first_arc(angle_start, angle1, angle2) {
+                        l1_num = now_lines - 3;
+                    } else {
+                        l1_num = now_lines - 4;
+                    }
+                    if is_first_first_seg(&pos_start, &pos1, &pos2) {
+                        l2_num = now_lines - 1;
+                    } else {
+                        l2_num = now_lines - 2;
+                    }
+                    recipe1 = ComparePointsLinesResult::PointArc((point_num, l1_num, angle2));
+                    recipe2 = ComparePointsLinesResult::PointSegment((point_num, l2_num));
+                } else {
+                    if is_first_first_seg(&pos_start, &pos1, &pos2) {
+                        l1_num = now_lines - 3;
+                    } else {
+                        l1_num = now_lines - 4;
+                    }
+                    if is_first_first_arc(angle_start, angle1, angle2) {
+                        l2_num = now_lines - 1;
+                    } else {
+                        l2_num = now_lines - 2;
+                    }
+                    recipe1 = ComparePointsLinesResult::PointSegment((point_num, l1_num));
+                    recipe2 = ComparePointsLinesResult::PointArc((point_num, l2_num, angle2));
+                }
+                self.line_line(&pos2, recipe1, recipe2, point_num);
             }
             IntersectLineLineResult::TwoArcsOnePoint((pos, angle1, angle2)) => {
                 let point_num = self.points.len();
@@ -376,10 +433,28 @@ impl FigureIntermediate {
             IntersectLineLineResult::TwoArcsTwoPoints(((pos1, angle1_pos1, angle2_pos1),
                                                        (pos2, angle1_pos2, angle2_pos2))) => {
                 let point_num = self.points.len();
+                let angle_start1= self.get_angle_start(l1_num);
+                let angle_start2= self.get_angle_start(l2_num);
                 let recipe1 = ComparePointsLinesResult::PointArc((point_num, l1_num, angle1_pos1));
                 let recipe2 = ComparePointsLinesResult::PointArc((point_num, l2_num, angle2_pos1));
                 self.line_line(&pos1, recipe1, recipe2, point_num);
-                //TODO
+                let point_num = self.points.len();
+                let now_lines = self.lines.len();
+                let l1_num;
+                if is_first_first_arc(angle_start1, angle1_pos1, angle1_pos2) {
+                    l1_num = now_lines - 3;
+                } else {
+                    l1_num = now_lines - 4;
+                }
+                let recipe1 = ComparePointsLinesResult::PointArc((point_num, l1_num, angle1_pos2));
+                let l2_num;
+                if is_first_first_arc(angle_start2, angle2_pos1, angle2_pos2) {
+                    l2_num = now_lines - 1;
+                } else {
+                    l2_num = now_lines - 2;
+                }
+                let recipe2 = ComparePointsLinesResult::PointArc((point_num, l2_num, angle2_pos2));
+                self.line_line(&pos2, recipe1, recipe2, point_num);
 
             }
             IntersectLineLineResult::TwoSegmentsPoint(pos) => {
@@ -869,37 +944,44 @@ impl FigureIntermediate {
             }
         }
     }
+}
 
+fn is_first_first_arc(angle_start: f64, angle1: f64, angle2: f64) -> bool {
+    return (angle1 - angle_start).abs() < (angle2 - angle_start).abs();
+}
+
+fn is_first_first_seg(start: &crate::Pos, p1: &crate::Pos, p2: &crate::Pos) -> bool {
+    return start.distance_squared(p1) < start.distance_squared(p2);
 }
 
 fn compare_point_line(i_point: usize,
                       j_line: usize,
                       p: &PointForIntermediate,
                       line: &LineForIntermediate) -> Option<ComparePointsLinesResult> {
-        if i_point != line.start_point_index && i_point != line.stop_point_index {
-            match &line.line {
-                Line::Segment(seg) => {
-                    if point_on_line(&seg.point1, &seg.point2, &p.pos) {
-                        if check_point_on_segment_line(&p.pos, &seg.point1, &seg.point2) {
-                            return Some(ComparePointsLinesResult::PointSegment((i_point, j_line)));
-                        }
+    if i_point != line.start_point_index && i_point != line.stop_point_index {
+        match &line.line {
+            Line::Segment(seg) => {
+                if point_on_line(&seg.point1, &seg.point2, &p.pos) {
+                    if check_point_on_segment_line(&p.pos, &seg.point1, &seg.point2) {
+                        return Some(ComparePointsLinesResult::PointSegment((i_point, j_line)));
                     }
                 }
-                Line::Arc(arc) => {
-                    if point_on_circle(&p.pos, &arc.center, arc.radius) {
-                        let res = check_point_in_arc(&arc, &p.pos);
-                        match res {
-                            Some(angle) => {
-                                return Some(ComparePointsLinesResult::PointArc((i_point, j_line, angle)));
-                            }
-                            None => {}
+            }
+            Line::Arc(arc) => {
+                if point_on_circle(&p.pos, &arc.center, arc.radius) {
+                    let res = check_point_in_arc(&arc, &p.pos);
+                    match res {
+                        Some(angle) => {
+                            return Some(ComparePointsLinesResult::PointArc((i_point, j_line, angle)));
                         }
-                    } 
-                }
+                        None => {}
+                    }
+                } 
             }
         }
-        None
     }
+    None
+}
 
 enum ComparePointsLinesResult {
     PointSegment((usize, usize)),
