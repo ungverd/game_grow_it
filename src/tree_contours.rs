@@ -313,7 +313,7 @@ impl FigureIntermediate {
                  pos: &crate::Pos,
                  recipe1: ComparePointsLinesResult,
                  recipe2: ComparePointsLinesResult,
-                 point_num: usize) {
+                 point_num: usize) -> usize {
         let point = PointForIntermediate {
             pos: pos.clone(),
             lines_starting: vec![],
@@ -322,7 +322,10 @@ impl FigureIntermediate {
         self.points.push(point);
         self.merge_point_line(recipe1);
         self.merge_point_line(recipe2);
+        let now_lines = self.lines.len();
+        // we save this number because adjust_new_point can add lines
         self.adjust_new_point(point_num);
+        return now_lines;
     }
 
     fn get_angle_start(&self, arc_num: usize) -> f64 {
@@ -388,9 +391,8 @@ impl FigureIntermediate {
                     angle_start= self.get_angle_start(l2_num);
                     pos_start = self.points[self.lines[l1_num].start_point_index].pos.clone();
                 }
-                self.line_line(&pos1, recipe1, recipe2, point_num);
+                let now_lines = self.line_line(&pos1, recipe1, recipe2, point_num);
                 let point_num = self.points.len();
-                let now_lines = self.lines.len();
                 let l1_num;
                 let l2_num;
                 let recipe1;
@@ -437,9 +439,8 @@ impl FigureIntermediate {
                 let angle_start2= self.get_angle_start(l2_num);
                 let recipe1 = ComparePointsLinesResult::PointArc((point_num, l1_num, angle1_pos1));
                 let recipe2 = ComparePointsLinesResult::PointArc((point_num, l2_num, angle2_pos1));
-                self.line_line(&pos1, recipe1, recipe2, point_num);
+                let now_lines = self.line_line(&pos1, recipe1, recipe2, point_num);
                 let point_num = self.points.len();
-                let now_lines = self.lines.len();
                 let l1_num;
                 if is_first_first_arc(angle_start1, angle1_pos1, angle1_pos2) {
                     l1_num = now_lines - 3;
@@ -601,7 +602,21 @@ impl FigureIntermediate {
 
     fn adjust_new_point(&mut self, point_num: usize) {
         let mut done = false;
+        let mut circles_num_start = 0;
+        while !done {
+            let res = self.compare_new_point_circles(point_num, circles_num_start);
+            match res {
+                None => {
+                    done = true;
+                }
+                Some(c_n) => {
+                    self.merge_points_circle(point_num, c_n);
+                    circles_num_start = c_n;
+                }
+            }
+        }
         let mut line_num_start = 0;
+        done = false;
         while !done {
             let res = self.compare_new_point_lines(point_num, line_num_start);
             match res {
@@ -618,20 +633,6 @@ impl FigureIntermediate {
                 }
                 None => {
                     done = true;
-                }
-            }
-        }
-        done = false;
-        let mut circles_num_start = 0;
-        while !done {
-            let res = self.compare_new_point_circles(point_num, circles_num_start);
-            match res {
-                None => {
-                    done = true;
-                }
-                Some(c_n) => {
-                    self.merge_points_circle(point_num, c_n);
-                    circles_num_start = c_n;
                 }
             }
         }
