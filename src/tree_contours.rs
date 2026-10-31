@@ -482,8 +482,22 @@ impl FigureIntermediate {
                 }
             }
         }
-        let mut finished_points_lines = false;
+        let mut finished_points_circles = false;
         let mut start_i_point = 0;
+        while !finished_points_circles {
+            let res = self.compare_points_circles(start_i_point);
+            match res {
+                None => {
+                    finished_points_circles = true;
+                }
+                Some((p_n, c_n)) => {
+                    self.merge_points_circle(p_n, c_n);
+                    start_i_point = p_n;
+                }
+            }
+        }
+        let mut finished_points_lines = false;
+        start_i_point = 0;
         while !finished_points_lines {
             let res = self.compare_points_lines(start_i_point, 0);
             match res {
@@ -505,20 +519,9 @@ impl FigureIntermediate {
                 }
             }
         }
-        let mut finished_points_circles = false;
-        start_i_point = 0;
-        while !finished_points_circles {
-            let res = self.compare_points_circles(start_i_point);
-            match res {
-                None => {
-                    finished_points_circles = true;
-                }
-                Some((p_n, c_n)) => {
-                    self.merge_points_circle(p_n, c_n);
-                    start_i_point = p_n;
-                }
-            }
-        }
+        // TODO circle circle
+        // TODO circle line
+        
         let mut finished_lines_lines = false;
         let mut start_i_line = 0;
         while !finished_lines_lines {
@@ -581,6 +584,36 @@ impl FigureIntermediate {
             }
         }
         None
+    }
+
+    fn compare_circles_circles(&self, start_i_circle: usize) {
+        for (counter, c1) in self.circles[start_i_circle..].iter().enumerate(){
+            let i = counter + start_i_circle;
+            for (counter2, c2) in self.circles[i + 1..].iter().enumerate() {
+                let j = counter2 + i + 1;
+                if c1.center.distance_squared(&c2.center) < MIN_DELTA {
+                    if c1.radius - c2.radius < MIN_DELTA {
+                        if c1.is_outer == c2.is_outer {
+                            // return Some(SameCircle);
+                        } else {
+                            // return Some(OppositeCircles);
+                        }
+                    } // no intersection
+                } else {
+                    let res = intersect_circle_circle(&c1.center, &c2.center, c1.radius, c2.radius);
+                    match res {
+                        CircleIntersectionResult::None => {} // no intersection
+                        CircleIntersectionResult::OnePoint(p) => {
+                            // return Some(...)
+                        }
+                        CircleIntersectionResult::TwoPoints((p1, p2)) => {
+                            // return Some(...)
+                        }
+                    }
+                }
+            }
+        }
+        //return None
     }
 
     fn compare_points_lines(&self, start_i_point: usize, start_i_line: usize) -> Option<ComparePointsLinesResult> {
