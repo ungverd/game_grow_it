@@ -965,7 +965,7 @@ impl crate::GameState {
                 float a = - MIN_A_DIF * 2.0;
                 vec2 pos = screen_coord;
 
-                outColor = vec4(0.85, 0.9, 0.8, 1.0);
+                outColor = vec4(0.55, 0.6, 0.5, 1.0);
                 
                 for (uint i=0u; i < rectCount; i++) {{
                     if (pos.x < position_size[i].x ||

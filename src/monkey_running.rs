@@ -1,8 +1,8 @@
 pub const MONKEY_START_X: f64 = 200.0;
 pub const MONKEY_START_Y: f64 = 1.0;
 const X_LIGHT_SOURCE: f64 = 0.0;
-const Y_LIGHT_SOURCE: f64 = 1.5;
-const MONKEY_LIGHT_SCALING_FACTOR: f64 = 1.02;
+const Y_LIGHT_SOURCE: f64 = 0.6;
+const MONKEY_LIGHT_SCALING_FACTOR: f64 = 1.003;
 
 pub struct MonkeyRunning {
     x_pos: f64,

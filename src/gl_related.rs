@@ -544,7 +544,7 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     
         precision mediump float;
         uniform sampler2D monkey_image;
-        ubiform sampler2D monkey_image_blurred;
+        uniform sampler2D monkey_image_blurred;
         
         in vec2 v_texCoord;
         in vec2 v_texCoord_blur;
@@ -552,8 +552,8 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
         
         void main() {
             if (texture(monkey_image, v_texCoord).x > 0.5) {
-                vec4 from_blurred = texture(monkey_image_blurred, v_textCoord_blur);
-                outColor = vec4(1.0 - from_blurred.x, 1.0 - from_blurred.x, 0.0, 1.0);
+                float from_blurred = texture(monkey_image_blurred, v_texCoord_blur).x;
+                outColor = vec4((1.0 - from_blurred) * 1.9, (1.0 - from_blurred) * 1.7, (1.0 - from_blurred) * 1.3, 1.0);
             } else {
                 discard;
             }

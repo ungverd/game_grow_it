@@ -95,7 +95,7 @@
           image_monkey.onload = async function() {
             var image_monkey_blurred = new Image();
             image_monkey_blurred.src = './monkey_anim_blurred.png'; 
-            image_monkey_blurred.onload() = function () {
+            image_monkey_blurred.onload = function () {
               gamestate.do_shader_stuff_and_constants(image_leaf,
                                                       image_monkey,
                                                       image_monkey_blurred,
