@@ -92,78 +92,83 @@
           const fname_monkey = json_monkey.fname;
           var image_monkey = new Image();
           image_monkey.src = `./${fname_monkey}`;
-          image_monkey.onload = function () {
-            gamestate.do_shader_stuff_and_constants(image_leaf,
-                                                    image_monkey,
-                                                    json_leaf.xmax_ratio,
-                                                    json_leaf.ymax_ratio,
-                                                    json_leaf.trunk_ratio,
-                                                    json_leaf.x_circle,
-                                                    json_leaf.y_circle,
-                                                    json_leaf.radius,
-                                                    json_leaf.theta_max,
-                                                    json_leaf.theta_min,
-                                                    json_monkey.width,
-                                                    json_monkey.height,
-                                                    json_monkey.frame_width,
-                                                    json_monkey.frame_height,
-                                                    json_monkey.n_frames,
-                                                    json_monkey.time_loop,
-                                                    json_monkey.advance_loop);
-            let left = document.getElementById("left");
-            let right = document.getElementById("right");
-            function onUpLeft(e) {
-              left.innerHTML = gamestate.left_plus();
-            }
-            document.getElementById("upLeft").onclick = onUpLeft;
-
-            function onUpRight(e) {
-              right.innerHTML = gamestate.right_plus();
-            }
-            document.getElementById("upRight").onclick = onUpRight;
-
-            function onDownLeft(e) {
-              left.innerHTML = gamestate.left_minus();
-            }
-            document.getElementById("downLeft").onclick = onDownLeft;
-
-            function onDownRight(e) {
-              right.innerHTML = gamestate.right_minus();
-            }
-            document.getElementById("downRight").onclick = onDownRight;
-
-            function onGrow(e) {
-              gamestate.grow_tree();
-            }
-            document.getElementById("growButton").onclick = onGrow;
-
-            function onUndo(e) {
-              gamestate.undo_grow_tree();
-            }
-            document.getElementById("undoButton").onclick = onUndo;
-
-            let canvas = document.getElementById("canvas");
-            function onCanvasClick(e) {
-              var rect = canvas.getBoundingClientRect();
-    		      x = e.clientX - rect.left;
-    		      y = 600 + rect.top - e.clientY;
-              gamestate.onclick(x, y);
-            }
-            canvas.onclick = onCanvasClick;
-
-            let prev;
-            let next;
-            function step(timestamp) {
-              if (prev === undefined) {
-                prev = timestamp;
+          image_monkey.onload = async function() {
+            var image_monkey_blurred = new Image();
+            image_monkey_blurred.src = './monkey_anim_blurred.png'; 
+            image_monkey_blurred.onload() = function () {
+              gamestate.do_shader_stuff_and_constants(image_leaf,
+                                                      image_monkey,
+                                                      image_monkey_blurred,
+                                                      json_leaf.xmax_ratio,
+                                                      json_leaf.ymax_ratio,
+                                                      json_leaf.trunk_ratio,
+                                                      json_leaf.x_circle,
+                                                      json_leaf.y_circle,
+                                                      json_leaf.radius,
+                                                      json_leaf.theta_max,
+                                                      json_leaf.theta_min,
+                                                      json_monkey.width,
+                                                      json_monkey.height,
+                                                      json_monkey.frame_width,
+                                                      json_monkey.frame_height,
+                                                      json_monkey.n_frames,
+                                                      json_monkey.time_loop,
+                                                      json_monkey.advance_loop);
+              let left = document.getElementById("left");
+              let right = document.getElementById("right");
+              function onUpLeft(e) {
+                left.innerHTML = gamestate.left_plus();
               }
-              next = timestamp;
-              const elapsed = next - prev;
-              gamestate.on_animation_frame(elapsed / 1000);
-              prev = timestamp;
+              document.getElementById("upLeft").onclick = onUpLeft;
+
+              function onUpRight(e) {
+                right.innerHTML = gamestate.right_plus();
+              }
+              document.getElementById("upRight").onclick = onUpRight;
+
+              function onDownLeft(e) {
+                left.innerHTML = gamestate.left_minus();
+              }
+              document.getElementById("downLeft").onclick = onDownLeft;
+
+              function onDownRight(e) {
+                right.innerHTML = gamestate.right_minus();
+              }
+              document.getElementById("downRight").onclick = onDownRight;
+
+              function onGrow(e) {
+                gamestate.grow_tree();
+              }
+              document.getElementById("growButton").onclick = onGrow;
+
+              function onUndo(e) {
+                gamestate.undo_grow_tree();
+              }
+              document.getElementById("undoButton").onclick = onUndo;
+
+              let canvas = document.getElementById("canvas");
+              function onCanvasClick(e) {
+                var rect = canvas.getBoundingClientRect();
+                x = e.clientX - rect.left;
+                y = 600 + rect.top - e.clientY;
+                gamestate.onclick(x, y);
+              }
+              canvas.onclick = onCanvasClick;
+
+              let prev;
+              let next;
+              function step(timestamp) {
+                if (prev === undefined) {
+                  prev = timestamp;
+                }
+                next = timestamp;
+                const elapsed = next - prev;
+                gamestate.on_animation_frame(elapsed / 1000);
+                prev = timestamp;
+                requestAnimationFrame(step);
+              }
               requestAnimationFrame(step);
             }
-            requestAnimationFrame(step);
           }
         }
       }

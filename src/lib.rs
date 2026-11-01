@@ -203,6 +203,7 @@ pub struct GameState {
     leaf_vao: Option<WebGlVertexArrayObject>,
     monkey_position_buffer: Option<WebGlBuffer>,
     monkey_tex_coord_buffer: Option<WebGlBuffer>,
+    monkey_tex_coord_b_buffer: Option<WebGlBuffer>,
     background_framebuffer: Option<WebGlFramebuffer>,
     background_program: Option<WebGlProgram>,
     background_vao: Option<WebGlVertexArrayObject>,
@@ -273,6 +274,7 @@ impl GameState {
             leaf_vao: None,
             monkey_position_buffer: None,
             monkey_tex_coord_buffer: None,
+            monkey_tex_coord_b_buffer: None,
             background_framebuffer: None,
             background_program: None,
             background_vao: None,
@@ -319,6 +321,7 @@ impl GameState {
     pub fn do_shader_stuff_and_constants(&mut self,
                                          img_leaf: web_sys::HtmlImageElement,
                                          img_monkey: web_sys::HtmlImageElement,
+                                         img_monkey_blurred: web_sys::HtmlImageElement,
                                          width_ratio: f64,
                                          height_ratio: f64,
                                          trunk_ratio: f64,
@@ -367,6 +370,7 @@ impl GameState {
             monkey_vao,
             monkey_position_buffer,
             monkey_tex_coords_buffer,
+            monkey_tex_coords_b_buffer,
             monkey_climbing_program,
             height_index,
             monkey_climbing_program_body,
@@ -374,13 +378,16 @@ impl GameState {
             ubo_buffer_climbing_body,
             monkey_position_buffer_climbing_body,
             monkey_vao_climbing_body) = gl_related::prepare_monkey(img_monkey,
+                                                                             img_monkey_blurred,
                                                                              &self.context,
                                                                              &self.monkey.running.vertex_arr,
-                                                                             &self.monkey.running.texture_arr)?;
+                                                                             &self.monkey.running.texture_arr,
+                                                                             &self.monkey.running.texture_blurred_arr)?;
         self.monkey_running_program = Some(monkey_running_program);
         self.monkey_vao = Some(monkey_vao);
         self.monkey_position_buffer = Some(monkey_position_buffer);
         self.monkey_tex_coord_buffer = Some(monkey_tex_coords_buffer);
+        self.monkey_tex_coord_b_buffer = Some(monkey_tex_coords_b_buffer);
         let (background_program,
              background_vao) = gl_related::prepare_to_draw_background(&self.context)?;
         self.background_program = Some(background_program);
@@ -574,6 +581,9 @@ impl GameState {
                     &self.monkey.running.texture_arr,
                     self.monkey_position_buffer.as_ref(),
                     self.monkey_tex_coord_buffer.as_ref());
+                gl_related::apply_arrays_monkey_running(&self.context,
+                    &self.monkey.running.texture_blurred_arr,
+                    self.monkey_tex_coord_b_buffer.as_ref());
             }
             MonkeyState::Climbing => {
                 let tree_num = self.monkey.climbing_num;

@@ -402,6 +402,32 @@ pub fn bind_ubos_for_tree(arr: &[[f32; crate::BUF_LENGTH]],
     Ok(())
 }
 
+pub fn apply_arrays_monkey_running(context:  &WebGl2RenderingContext,
+                           monkey_texture_blurred_array: &[f32],
+                           monkey_tex_coord_blurred_buffer: Option<&WebGlBuffer>,) {
+    
+    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, monkey_tex_coord_blurred_buffer);
+
+    // Note that `Float32Array::view` is somewhat dangerous (hence the
+    // `unsafe`!). This is creating a raw view into our module's
+    // `WebAssembly.Memory` buffer, but if we allocate more pages for ourself
+    // (aka do a memory allocation in Rust) it'll cause the buffer to change,
+    // causing the `Float32Array` to be invalid.
+    //
+    // As a result, after `Float32Array::view` we have to be very careful not to
+    // do any memory allocations before it's dropped.
+    unsafe {
+        let tex_coords_array_b_buf_view = js_sys::Float32Array::view(monkey_texture_blurred_array);
+
+        context.buffer_data_with_array_buffer_view(
+            WebGl2RenderingContext::ARRAY_BUFFER,
+            &tex_coords_array_b_buf_view,
+            WebGl2RenderingContext::DYNAMIC_DRAW,
+        );
+    }
+    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
+}
+
 pub fn apply_arrays_monkey(context:  &WebGl2RenderingContext,
                            monkey_vertex_array: &[f32],
                            monkey_texture_array: &[f32],
@@ -476,10 +502,13 @@ pub fn apply_array_climbing_body(
 }
 
 pub fn prepare_monkey(img: web_sys::HtmlImageElement,
+                      img_blurred: web_sys::HtmlImageElement,
                       context:  &WebGl2RenderingContext,
                       monkey_vertex_array: &[f32],
-                      monkey_texture_array: &[f32],) -> Result<(WebGlProgram,
+                      monkey_texture_array: &[f32],
+                      monkey_blurred_array: &[f32]) -> Result<(WebGlProgram,
                                                                 WebGlVertexArrayObject,
+                                                                WebGlBuffer,
                                                                 WebGlBuffer,
                                                                 WebGlBuffer,
                                                                 WebGlProgram,
@@ -496,11 +525,14 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
  
         in vec4 position;
         in vec2 a_texCoord;
+        in vec2 a_texCoord_blur;
         out vec2 v_texCoord;
+        out vec2 v_texCoord_blur;
 
         void main() {
             gl_Position = position;
             v_texCoord = a_texCoord;
+            v_texCoord_blur = a_texCoord_blur;
         }
         "##,
     )?;
@@ -512,13 +544,16 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     
         precision mediump float;
         uniform sampler2D monkey_image;
+        ubiform sampler2D monkey_image_blurred;
         
         in vec2 v_texCoord;
+        in vec2 v_texCoord_blur;
         out vec4 outColor;
         
         void main() {
             if (texture(monkey_image, v_texCoord).x > 0.5) {
-                outColor = vec4(0.0, 0.0, 0.0, 1.0);
+                vec4 from_blurred = texture(monkey_image_blurred, v_textCoord_blur);
+                outColor = vec4(1.0 - from_blurred.x, 1.0 - from_blurred.x, 0.0, 1.0);
             } else {
                 discard;
             }
@@ -566,12 +601,7 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     );
     context.enable_vertex_attrib_array(position_attribute_location as u32);
 
-    /*let texture_coords: [f64; 12] = [0.0, 0.0, 
-                                     1.0, 0.0,
-                                     0.0, 1.0,
-                                     1.0, 0.0,
-                                     1.0, 1.0,
-                                     0.0, 1.0];  */                          
+                         
     let tex_coord_attribute_location = context.get_attrib_location(&program, "a_texCoord");
     //crate::log(&format!("tex_coord {:?}", tex_coord_attribute_location));
     let tex_coord_buffer = context.create_buffer().ok_or("Failed to create buffer")?;
@@ -597,6 +627,38 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     context.enable_vertex_attrib_array(tex_coord_attribute_location as u32);
     context.vertex_attrib_pointer_with_i32(
         tex_coord_attribute_location as u32,
+        2,
+        WebGl2RenderingContext::FLOAT,
+        false,
+        0,
+        0,
+    );
+
+    let tex_coord_attribute_location_b = context.get_attrib_location(&program, "a_texCoord_blur");
+    //crate::log(&format!("tex_coord {:?}", tex_coord_attribute_location));
+    let tex_coord_buffer_b = context.create_buffer().ok_or("Failed to create buffer")?;
+    context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&tex_coord_buffer_b));
+
+    // Note that `Float32Array::view` is somewhat dangerous (hence the
+    // `unsafe`!). This is creating a raw view into our module's
+    // `WebAssembly.Memory` buffer, but if we allocate more pages for ourself
+    // (aka do a memory allocation in Rust) it'll cause the buffer to change,
+    // causing the `Float32Array` to be invalid.
+    //
+    // As a result, after `Float32Array::view` we have to be very careful not to
+    // do any memory allocations before it's dropped.
+    unsafe {
+        let texture_coords_array_buf_view_b = js_sys::Float32Array::view(monkey_blurred_array);
+
+        context.buffer_data_with_array_buffer_view(
+            WebGl2RenderingContext::ARRAY_BUFFER,
+            &texture_coords_array_buf_view_b,
+            WebGl2RenderingContext::DYNAMIC_DRAW,
+        );
+    }
+    context.enable_vertex_attrib_array(tex_coord_attribute_location_b as u32);
+    context.vertex_attrib_pointer_with_i32(
+        tex_coord_attribute_location_b as u32,
         2,
         WebGl2RenderingContext::FLOAT,
         false,
@@ -647,6 +709,50 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
     };
     let monkey_texture_index = context.get_uniform_location(&program, "monkey_image");
     context.uniform1i(monkey_texture_index.as_ref(), 3);
+
+    let texture_b = context.create_texture().expect("Cannot create gl texture");
+    let level = 0;
+    let internal_format = WebGl2RenderingContext::R8;
+    let src_format = WebGl2RenderingContext::RED;
+    let src_type = WebGl2RenderingContext::UNSIGNED_BYTE;
+
+    context.active_texture(WebGl2RenderingContext::TEXTURE4);
+    context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&texture_b));
+    context.tex_parameteri(
+        WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_WRAP_S,
+        WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+    );
+    context.tex_parameteri(
+        WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_WRAP_T,
+        WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+    );
+    context.tex_parameteri(
+        WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+        WebGl2RenderingContext::NEAREST as i32,
+    );
+    context.tex_parameteri(
+        WebGl2RenderingContext::TEXTURE_2D,
+        WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+        WebGl2RenderingContext::NEAREST as i32,
+    );
+
+    let err = context.tex_image_2d_with_u32_and_u32_and_html_image_element(
+                WebGl2RenderingContext::TEXTURE_2D,
+                level,
+                internal_format as i32,
+                src_format,
+                src_type,
+                &img_blurred,
+            );
+    match err {
+    Ok(()) => (),
+    Err(val) => {return Err(val)}
+    };
+    let monkey_texture_index_b = context.get_uniform_location(&program, "monkey_image_blurred");
+    context.uniform1i(monkey_texture_index_b.as_ref(), 4);
 
     let vert_shader_climbing = compile_shader(
         &context,
@@ -938,6 +1044,7 @@ pub fn prepare_monkey(img: web_sys::HtmlImageElement,
         vao,
         positions_buffer,
         tex_coord_buffer,
+        tex_coord_buffer_b,
         program_climbing,
         height_on_tree_index,
         program_climbing_body,

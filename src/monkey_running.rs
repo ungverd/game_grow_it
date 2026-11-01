@@ -1,5 +1,8 @@
 pub const MONKEY_START_X: f64 = 200.0;
 pub const MONKEY_START_Y: f64 = 1.0;
+const X_LIGHT_SOURCE: f64 = 0.0;
+const Y_LIGHT_SOURCE: f64 = 1.5;
+const MONKEY_LIGHT_SCALING_FACTOR: f64 = 1.02;
 
 pub struct MonkeyRunning {
     x_pos: f64,
@@ -9,6 +12,7 @@ pub struct MonkeyRunning {
     pub parameters: MonkeyRunningDrawParameters,
     pub vertex_arr: [f32; 12],
     pub texture_arr: [f32; 12],
+    pub texture_blurred_arr: [f32; 12],
     start_x: f64,
     desired_x: f64,
 }
@@ -56,6 +60,7 @@ impl MonkeyRunning {
             parameters,
             vertex_arr: [0.0; 12],
             texture_arr: [0.0; 12],
+            texture_blurred_arr: [0.0; 12],
             start_x: MONKEY_START_X,
             desired_x: MONKEY_START_X,
         }
@@ -166,12 +171,30 @@ impl MonkeyRunning {
         if self.is_left {
             (x_coord_left, x_coord_right) = (x_coord_right, x_coord_left);
         }
+        
         self.texture_arr = [x_coord_left as f32,  y_coord_bottom as f32,
                            x_coord_right as f32, y_coord_bottom as f32,
                            x_coord_left as f32,  y_coord_top as f32,
                            x_coord_right as f32, y_coord_bottom as f32,
                            x_coord_right as f32, y_coord_top as f32,
                            x_coord_left as f32,  y_coord_top as f32,];
+        // **** for blurring light
+        let k = (x_coord_right - x_coord_left) / (x_right - x_left);
+        let m = (y_coord_top - y_coord_bottom) / (y_top - y_bottom);
+        let b = x_coord_right - k * x_right;
+        let c = y_coord_top - m * y_top;
+        let x_coord_left_modified = get_u_modified(x_coord_left, k, b, X_LIGHT_SOURCE);
+        let x_coord_right_modified = get_u_modified(x_coord_right, k, b, X_LIGHT_SOURCE);
+        let y_coord_top_modified = get_u_modified(y_coord_top, m, c, Y_LIGHT_SOURCE);
+        let y_coord_bottom_modified = get_u_modified(y_coord_bottom, m, c, Y_LIGHT_SOURCE);
+        
+        self.texture_blurred_arr = [x_coord_left_modified as f32,  y_coord_bottom_modified as f32,
+                           x_coord_right_modified as f32, y_coord_bottom_modified as f32,
+                           x_coord_left_modified as f32,  y_coord_top_modified as f32,
+                           x_coord_right_modified as f32, y_coord_bottom_modified as f32,
+                           x_coord_right_modified as f32, y_coord_top_modified as f32,
+                           x_coord_left_modified as f32,  y_coord_top_modified as f32,];
+        // ****
     }
 
     pub fn set_on_pos(&mut self, x: f64, y: f64) {
@@ -194,4 +217,9 @@ impl MonkeyRunning {
             self.is_left = true;
         }
     }
+}
+
+fn get_u_modified(u: f64, k: f64, b: f64, xs: f64) -> f64 {
+    let bkxs = b + k * xs;
+    (u - bkxs) / MONKEY_LIGHT_SCALING_FACTOR + bkxs
 }
