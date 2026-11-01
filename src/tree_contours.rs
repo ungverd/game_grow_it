@@ -519,7 +519,20 @@ impl FigureIntermediate {
                 }
             }
         }
-        // TODO circle circle
+        let mut finished_circle_circle = false;
+        let mut start_i_circle = 0;
+        while !finished_circle_circle {
+            let res = self.compare_circles_circles(start_i_circle);
+            match res {
+                None => {
+                    finished_circle_circle = true
+                }
+                Some((i, j, recipe)) => {
+                    // TODO self.merge_circle_circle(i, j, recipe);
+                    start_i_circle = i;
+                }
+            }
+        }
         // TODO circle line
         
         let mut finished_lines_lines = false;
@@ -586,7 +599,7 @@ impl FigureIntermediate {
         None
     }
 
-    fn compare_circles_circles(&self, start_i_circle: usize) {
+    fn compare_circles_circles(&self, start_i_circle: usize) -> Option<(usize, usize, CircleCircleRes)> {
         for (counter, c1) in self.circles[start_i_circle..].iter().enumerate(){
             let i = counter + start_i_circle;
             for (counter2, c2) in self.circles[i + 1..].iter().enumerate() {
@@ -594,9 +607,9 @@ impl FigureIntermediate {
                 if c1.center.distance_squared(&c2.center) < MIN_DELTA {
                     if c1.radius - c2.radius < MIN_DELTA {
                         if c1.is_outer == c2.is_outer {
-                            // return Some(SameCircle);
+                            return Some((i, j, CircleCircleRes::SameCircle));
                         } else {
-                            // return Some(OppositeCircles);
+                            return Some((i, j, CircleCircleRes::SameOpposite));
                         }
                     } // no intersection
                 } else {
@@ -604,16 +617,16 @@ impl FigureIntermediate {
                     match res {
                         CircleIntersectionResult::None => {} // no intersection
                         CircleIntersectionResult::OnePoint(p) => {
-                            // return Some(...)
+                            return Some((i, j, CircleCircleRes::OnePoint(p)));
                         }
                         CircleIntersectionResult::TwoPoints((p1, p2)) => {
-                            // return Some(...)
+                            return Some((i, j, CircleCircleRes::TwoPoints((p1, p2))));
                         }
                     }
                 }
             }
         }
-        //return None
+        None
     }
 
     fn compare_points_lines(&self, start_i_point: usize, start_i_line: usize) -> Option<ComparePointsLinesResult> {
@@ -978,6 +991,13 @@ impl FigureIntermediate {
             }
         }
     }
+}
+
+enum CircleCircleRes {
+    SameCircle,
+    SameOpposite,
+    OnePoint(crate::Pos),
+    TwoPoints((crate::Pos, crate::Pos))
 }
 
 fn is_first_first_arc(angle_start: f64, angle1: f64, angle2: f64) -> bool {
