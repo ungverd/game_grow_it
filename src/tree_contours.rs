@@ -1,6 +1,8 @@
 use core::f64;
 use std::f64::MIN;
 
+use crate::tree_contours::ComparePointsLinesResult::PointArc;
+
 const MIN_DELTA: f64 = 0.000001;
 
 pub struct LineSegment {
@@ -491,7 +493,7 @@ impl FigureIntermediate {
                     finished_points_circles = true;
                 }
                 Some((p_n, c_n)) => {
-                    self.merge_points_circle(p_n, c_n);
+                    self.merge_point_circle(p_n, c_n);
                     start_i_point = p_n;
                 }
             }
@@ -528,7 +530,7 @@ impl FigureIntermediate {
                     finished_circle_circle = true
                 }
                 Some((i, j, recipe)) => {
-                    // TODO self.merge_circle_circle(i, j, recipe);
+                    self.merge_circle_circle(i, j, recipe);
                     start_i_circle = i;
                 }
             }
@@ -551,13 +553,18 @@ impl FigureIntermediate {
         }
     }
 
-    fn merge_points_circle(&mut self, p_n: usize, c_n: usize) {
-        let len_lines_before = self.lines.len();
+    fn merge_point_circle(&mut self, p_n: usize, c_n: usize) {
         let pos = &self.points[p_n].pos;
         let circle = self.circles.swap_remove(c_n);
         let dif = pos.add(&circle.center.multiply(-1.));
         let angle = dif.y.atan2(dif.x);
-        let new_arc = Arc::new(circle.center, circle.radius, angle - 2. * f64::consts::PI, angle);
+        let angle_start;
+        if circle.is_outer {
+            angle_start = angle - 2. * f64::consts::PI;
+        } else {
+            angle_start = angle + 2. * f64::consts::PI;
+        }
+        let new_arc = Arc::new(circle.center, circle.radius, angle_start, angle);
         let new_line = Line::Arc(new_arc);
         let new_interm = LineForIntermediate {
             start_point_index: p_n,
@@ -565,26 +572,6 @@ impl FigureIntermediate {
             line: new_line
         };
         self.lines.push(new_interm);
-        let mut finished_points_lines = false;
-        let mut start_i_point = p_n + 1;
-        while !finished_points_lines {
-            let res = self.compare_points_lines(start_i_point,
-                                                                    len_lines_before);
-            match res {
-                None => {
-                    finished_points_lines = true;
-                }
-                Some(result) => {
-                    match result {
-                        ComparePointsLinesResult::PointArc((p_num, _, _)) => {
-                            self.merge_point_line(result);
-                            start_i_point = p_num;
-                        }
-                        ComparePointsLinesResult::PointSegment(_) => {}// If we are here it's an error!
-                    }
-                }
-            }
-        }
     }
 
     fn compare_points_circles(&self, start_i_point: usize) -> Option<(usize, usize)> {
@@ -597,6 +584,64 @@ impl FigureIntermediate {
             }
         }
         None
+    }
+
+    fn remove_second_circle(&mut self, i: usize, j: usize) -> Circle {
+        let c2;
+        if j == self.circles.len() {
+            c2 = self.circles.swap_remove(i);
+        } else {
+            c2 = self.circles.swap_remove(j)
+        }
+        c2
+    }
+
+    fn merge_circle_circle(&mut self, i: usize, j: usize, recipe: CircleCircleRes) {
+        match recipe {
+            CircleCircleRes::SameCircle => {
+                self.circles.swap_remove(j);
+            }
+            CircleCircleRes::SameOpposite => {
+                self.circles.swap_remove(i);
+                self.remove_second_circle(i, j);
+            }
+            CircleCircleRes::OnePoint(p) => {
+                let interm_point = PointForIntermediate{
+                    pos: p,
+                    lines_starting: vec![],
+                    lines_stopping: vec![]
+                };
+                self.points.push(interm_point);
+                let p_n = self.points.len() - 1;
+                self.merge_point_circle(p_n, j);
+                self.merge_point_circle(p_n, i);
+            }
+            CircleCircleRes::TwoPoints((p1, p2)) => {
+                let interm_point1 = PointForIntermediate{
+                    pos: p1,
+                    lines_starting: vec![],
+                    lines_stopping: vec![]
+                };
+                self.points.push(interm_point1);
+                let p_n = self.points.len() - 1;
+                self.merge_point_circle(p_n, j);
+                self.merge_point_circle(p_n, i);
+                let now_len = self.lines.len();
+                let l1 = now_len - 2;
+                let l2 = now_len - 1;
+                // two lines added by merge_point_circle
+                let interm_point2 = PointForIntermediate{
+                    pos: p2,
+                    lines_starting: vec![],
+                    lines_stopping: vec![]
+                };
+                self.points.push(interm_point2);
+                let p_n = self.points.len() - 1;
+                // TODO
+                //let recipe2 = ComparePointsLinesResult(PointArc(()))
+                //self.merge_point_line(res);
+            }
+        }
     }
 
     fn compare_circles_circles(&self, start_i_circle: usize) -> Option<(usize, usize, CircleCircleRes)> {
@@ -656,7 +701,7 @@ impl FigureIntermediate {
                     done = true;
                 }
                 Some(c_n) => {
-                    self.merge_points_circle(point_num, c_n);
+                    self.merge_point_circle(point_num, c_n);
                     circles_num_start = c_n;
                 }
             }
