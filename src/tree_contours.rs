@@ -586,24 +586,15 @@ impl FigureIntermediate {
         None
     }
 
-    fn remove_second_circle(&mut self, i: usize, j: usize) -> Circle {
-        let c2;
-        if j == self.circles.len() {
-            c2 = self.circles.swap_remove(i);
-        } else {
-            c2 = self.circles.swap_remove(j)
-        }
-        c2
-    }
-
     fn merge_circle_circle(&mut self, i: usize, j: usize, recipe: CircleCircleRes) {
         match recipe {
             CircleCircleRes::SameCircle => {
                 self.circles.swap_remove(j);
             }
             CircleCircleRes::SameOpposite => {
+                self.circles.swap_remove(j);
                 self.circles.swap_remove(i);
-                self.remove_second_circle(i, j);
+                // j is after i so we should not worry about messing up by swapping
             }
             CircleCircleRes::OnePoint(p) => {
                 let interm_point = PointForIntermediate{
