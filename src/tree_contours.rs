@@ -622,15 +622,30 @@ impl FigureIntermediate {
                 let l2 = now_len - 1;
                 // two lines added by merge_point_circle
                 let interm_point2 = PointForIntermediate{
-                    pos: p2,
+                    pos: p2.clone(),
                     lines_starting: vec![],
                     lines_stopping: vec![]
                 };
                 self.points.push(interm_point2);
                 let p_n = self.points.len() - 1;
-                // TODO
-                //let recipe2 = ComparePointsLinesResult(PointArc(()))
-                //self.merge_point_line(res);
+                let line2 = &self.lines[l2].line;
+                match line2 {
+                    Line::Segment(_) => {unreachable!()}
+                    Line::Arc(arc2) => {
+                        let angle2 = check_point_in_arc(arc2, &p2).unwrap();
+                        let recipe2 = ComparePointsLinesResult::PointArc((p_n, l2, angle2));
+                        self.merge_point_line(recipe2);
+                    }
+                }
+                let line1 = &self.lines[l1].line;
+                match line1 {
+                    Line::Segment(_) => {unreachable!()}
+                    Line::Arc(arc1) => {
+                        let angle1 = check_point_in_arc(arc1, &p2).unwrap();
+                        let recipe1 = ComparePointsLinesResult::PointArc((p_n, l1, angle1));
+                        self.merge_point_line(recipe1);
+                    }
+                }
             }
         }
     }
